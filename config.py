@@ -16,12 +16,12 @@ from datetime import datetime
 # ============================================================================
 
 # Binance Testnet API Keys (Demo - No Real Money)
-BINANCE_TESTNET_API_KEY = "qIt290d0RHNSmhH0ASW84cSIY2AJw4cbli0LwL8TbrfL9jZLUah0LMZnWFgUR9E8"
-BINANCE_TESTNET_API_SECRET = "V1CNjAe8DAK3GFTOZjsEzYjhYGaFoD8I3j7qy8ZWStxL49To2VOFF6sOxRcG7ysz"
+BINANCE_TESTNET_API_KEY = "-------------------------"
+BINANCE_TESTNET_API_SECRET = "Thank God I hide this all"
 
 # Binance Mainnet API Keys (Optional - for live data only)
-BINANCE_MAINNET_API_KEY = "QHmxVxgDNFCuNvQEmBtYBhGLxT0zvghy6oSmMcpze1ca0A7ybXoaMqzIaStPqiM2"
-BINANCE_MAINNET_API_SECRET = "QYO2jhNmEYAEJzv3te0MYaRDND5FRJh6CuRRLDQ3e8pjecU1TYRBJh0TDBlqXROr"
+BINANCE_MAINNET_API_KEY = "------------------------------------------------------------"
+BINANCE_MAINNET_API_SECRET = "---------------------------------------------------------"
 
 # API Configuration
 USE_TESTNET = False  # Set to True for demo, False for live data only
