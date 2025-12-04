@@ -1,0 +1,10 @@
+qsci_venv/
+.vscode/
+__pycache__/
+*.pyc
+.DS_Store
+.idea/
+env/
+venv/
+*.log
+ta-lib/

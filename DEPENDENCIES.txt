@@ -1,0 +1,76 @@
+# QSCI BTC Options Backtester - Dependencies
+
+## Install all required packages using pip
+
+# Core Data & Analysis
+pandas==2.0.3
+numpy==1.24.3
+scipy==1.11.1
+
+# Binance API Integration
+python-binance==1.0.17
+binance-connector==3.4.0
+
+# Technical Indicators & Calculations
+ta-lib==0.4.28
+pandas-ta==0.3.14b0
+
+# Visualization (Optional but recommended)
+matplotlib==3.7.2
+seaborn==0.12.2
+
+# Data Management
+pytz==2023.3
+python-dateutil==2.8.2
+
+# Configuration & Logging
+python-dotenv==1.0.0
+colorama==0.4.6
+
+# Performance & Optimization
+numba==0.57.0
+
+# Backtesting Framework (Optional)
+backtrader==1.9.78
+
+## Installation Command for Ubuntu 22.04 LTS:
+
+# 1. Update system packages
+sudo apt-get update
+sudo apt-get upgrade -y
+
+# 2. Install system dependencies
+sudo apt-get install -y python3-pip python3-dev build-essential
+
+# 3. Install TA-Lib (required for technical indicators)
+sudo apt-get install -y libta-lib0 libta-lib-dev
+
+# 4. Create virtual environment (recommended)
+python3 -m venv qsci_venv
+source qsci_venv/bin/activate
+
+# 5. Install Python packages
+pip install --upgrade pip setuptools wheel
+pip install pandas==2.0.3 numpy==1.24.3 scipy==1.11.1
+pip install python-binance==1.0.17 binance-connector==3.4.0
+pip install TA-Lib==0.4.28 pandas-ta==0.3.14b0
+pip install matplotlib==3.7.2 seaborn==0.12.2
+pip install python-dotenv==1.0.0 colorama==0.4.6
+pip install numba==0.57.0
+
+# 6. Verify installation
+python3 -c "import pandas, numpy, talib, binance; print('All packages installed successfully!')"
+
+## Quick Install Script (Copy & Run)
+# Save as: install_dependencies.sh
+# chmod +x install_dependencies.sh
+# ./install_dependencies.sh
+
+#!/bin/bash
+sudo apt-get update
+sudo apt-get install -y python3-pip python3-dev build-essential libta-lib0 libta-lib-dev
+python3 -m venv qsci_venv
+source qsci_venv/bin/activate
+pip install --upgrade pip setuptools wheel
+pip install pandas numpy scipy python-binance binance-connector TA-Lib pandas-ta matplotlib seaborn python-dotenv colorama numba
+echo "Installation complete! Activate with: source qsci_venv/bin/activate"
