@@ -82,6 +82,33 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
+/* Icon Styling */
+.icon-inline {
+    width: 18px;
+    height: 18px;
+    vertical-align: middle;
+    display: inline-block;
+    margin-right: 6px;
+}
+
+.step-icon img,
+.perf-icon img {
+    width: 48px;
+    height: 48px;
+    display: block;
+}
+
+.feature-icon {
+    width: 40px !important;
+    height: 40px !important;
+    display: block !important;
+}
+
+.modal-icon img {
+    width: 32px;
+    height: 32px;
+}
+
 /* Cursor Glow Effect */
 .cursor-glow {
     position: fixed;
@@ -914,7 +941,10 @@ body {
 }
 
 .cat-icon {
-    font-size: 1.4rem;
+    width: 24px;
+    height: 24px;
+    display: inline-block;
+    vertical-align: middle;
 }
 
 .equation-card {
@@ -1310,6 +1340,14 @@ body {
 .step-icon {
     font-size: 2rem;
     margin-bottom: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.step-icon img {
+    width: 48px;
+    height: 48px;
 }
 
 .flow-step h4 {
@@ -1569,6 +1607,14 @@ body {
 .perf-icon {
     font-size: 2rem;
     margin-bottom: 16px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.perf-icon img {
+    width: 48px;
+    height: 48px;
 }
 
 .perf-metric {

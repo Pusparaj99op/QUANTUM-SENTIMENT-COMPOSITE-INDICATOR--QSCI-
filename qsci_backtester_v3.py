@@ -25,7 +25,8 @@ from pathlib import Path
 import glob
 import re
 from dataclasses import dataclass, field
-from concurrent.futures import ThreadPoolExecutor
+from collections import defaultdict
+from math import log, sqrt, exp, erf
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -62,43 +63,36 @@ except ImportError:
 @dataclass
 class BinanceFees:
     """Binance fee structure for regular users"""
-    # Spot Trading Fees (Maker/Taker)
-    spot_maker_fee: float = 0.001  # 0.1%
-    spot_taker_fee: float = 0.001  # 0.1%
 
-    # Futures Trading Fees (Maker/Taker)
-    futures_maker_fee: float = 0.0002  # 0.02%
-    futures_taker_fee: float = 0.0004  # 0.04%
+    spot_maker_fee: float = 0.0008  # 0.08%
+    spot_taker_fee: float = 0.001   # 0.10%
+    futures_maker_fee: float = 0.0002
+    futures_taker_fee: float = 0.0004
+    options_maker_fee: float = 0.0002
+    options_taker_fee: float = 0.0004
+    options_exercise_fee: float = 0.0002
+    base_slippage: float = 0.0003
+    volatility_slippage_mult: float = 0.6
+    min_slippage: float = 0.00015
 
-    # Options Trading Fees
-    options_trading_fee: float = 0.0003  # 0.03%
-    options_exercise_fee: float = 0.0002  # 0.02%
-
-    # Slippage (market impact)
-    base_slippage: float = 0.001  # 0.1% base
-    volatility_slippage_mult: float = 0.5  # Additional slippage based on volatility
-
-    # Funding Rate (for perpetuals, applied every 8 hours)
-    avg_funding_rate: float = 0.0001  # 0.01% average
-
-    def calculate_total_cost(self, trade_value: float, is_maker: bool = False,
-                            volatility: float = 0.02, trade_type: str = 'options') -> float:
-        """Calculate total transaction cost for a trade"""
+    def calculate_total_cost(self, trade_value: float, spread_pct: float,
+                             is_maker: bool = False, trade_type: str = 'options') -> Tuple[float, float]:
+        """Return (fees, slippage) for a trade."""
 
         if trade_type == 'options':
-            base_fee = self.options_trading_fee
+            fee_rate = self.options_maker_fee if is_maker else self.options_taker_fee
         elif trade_type == 'futures':
-            base_fee = self.futures_maker_fee if is_maker else self.futures_taker_fee
+            fee_rate = self.futures_maker_fee if is_maker else self.futures_taker_fee
         else:
-            base_fee = self.spot_maker_fee if is_maker else self.spot_taker_fee
+            fee_rate = self.spot_maker_fee if is_maker else self.spot_taker_fee
 
-        # Dynamic slippage based on volatility
-        slippage = self.base_slippage + (volatility * self.volatility_slippage_mult)
+        fee = trade_value * fee_rate
 
-        # Total cost percentage
-        total_cost_pct = base_fee + slippage
+        impact_component = trade_value * max(self.min_slippage, self.base_slippage)
+        spread_component = trade_value * max(spread_pct / 2, self.min_slippage)
+        slippage = impact_component + spread_component
 
-        return trade_value * total_cost_pct
+        return fee, slippage
 
 # ============================================================================
 # LOGGING SETUP
@@ -398,6 +392,76 @@ class VectorizedTechnicalAnalysis:
 
         return result
 
+
+@dataclass
+class OptionMarketModel:
+    """Simplified Binance options microstructure model"""
+
+    risk_free_rate: float = 0.015
+    min_iv: float = 0.25
+    max_iv: float = 2.0
+    base_spread: float = 0.001
+    vol_spread_mult: float = 1.1
+    liquidity_spread: float = 0.0005
+
+    @staticmethod
+    def _norm_cdf(x: float) -> float:
+        return 0.5 * (1.0 + erf(x / sqrt(2.0)))
+
+    def annualize_vol(self, atr_pct: float) -> float:
+        atr_pct = max(atr_pct, 0.0005)
+        implied = atr_pct * sqrt(365)
+        return min(max(implied, self.min_iv), self.max_iv)
+
+    def price_option(self, spot: float, strike: float, dte: float, iv: float,
+                      option_type: str = "CALL") -> Tuple[float, float]:
+        strike = max(strike, 1e-6)
+        spot = max(spot, 1e-6)
+        time_fraction = max(dte, 0.25) / 365
+        sigma = min(max(iv, self.min_iv), self.max_iv)
+        vol_sqrt_t = sigma * sqrt(time_fraction)
+
+        if vol_sqrt_t == 0:
+            if option_type == "CALL":
+                intrinsic = max(spot - strike, 0.0)
+                delta = 1.0 if spot > strike else 0.0
+            else:
+                intrinsic = max(strike - spot, 0.0)
+                delta = -1.0 if spot < strike else 0.0
+            return intrinsic, delta
+
+        d1 = (log(spot / strike) + (self.risk_free_rate + 0.5 * sigma ** 2) * time_fraction) / vol_sqrt_t
+        d2 = d1 - vol_sqrt_t
+        nd1 = self._norm_cdf(d1)
+        nd2 = self._norm_cdf(d2)
+        discount = exp(-self.risk_free_rate * time_fraction)
+
+        if option_type == "CALL":
+            price = spot * nd1 - strike * discount * nd2
+            delta = nd1
+        else:  # PUT
+            price = strike * discount * (1 - nd2) - spot * (1 - nd1)
+            delta = nd1 - 1  # Put delta is negative
+
+        return max(price, 0.0), delta
+
+    def estimate_fair_value(self, spot: float, strike: float, dte: float,
+                            atr_pct: float, option_type: str = "CALL") -> Dict[str, float]:
+        iv = self.annualize_vol(atr_pct)
+        mid, delta = self.price_option(spot, strike, dte, iv, option_type)
+        spread_pct = min(self.base_spread + (self.vol_spread_mult * atr_pct) + self.liquidity_spread, 0.02)
+        bid = max(mid * (1 - spread_pct / 2), 0.0)
+        ask = mid * (1 + spread_pct / 2)
+        return {
+            'iv': iv,
+            'mid': mid,
+            'bid': bid,
+            'ask': ask,
+            'spread_pct': spread_pct,
+            'delta': delta,
+            'option_type': option_type
+        }
+
 # ============================================================================
 # POSITION MANAGEMENT WITH ROLLING
 # ============================================================================
@@ -412,6 +476,8 @@ class Position:
     strike: float
     delta: float
     qsci: float
+    implied_vol: float
+    option_type: str = "CALL"  # CALL or PUT
     entry_time: datetime = field(default_factory=datetime.now)
     current_price: float = 0.0
     exit_price: Optional[float] = None
@@ -424,6 +490,11 @@ class Position:
     tp3_triggered: bool = False
     rolled_count: int = 0
     total_fees_paid: float = 0.0
+    peak_unrealized: float = 0.0
+    multi_tf_score: float = 0.0
+    sentiment_score: float = 0.0
+    regime: str = "train"
+    trade_return: float = 0.0
 
     def __post_init__(self):
         self.current_price = self.entry_price
@@ -431,6 +502,7 @@ class Position:
     def update_price(self, new_price: float):
         self.current_price = new_price
         self.pnl = (self.current_price - self.entry_price) * self.quantity
+        self.peak_unrealized = max(self.peak_unrealized, self.pnl)
 
     def close(self, exit_price: float, fees: float = 0.0):
         self.exit_price = exit_price
@@ -439,14 +511,18 @@ class Position:
         self.pnl = (exit_price - self.entry_price) * self.quantity
         self.total_fees_paid += fees
         self.pnl_after_fees = self.pnl - self.total_fees_paid
+        notional = self.entry_price * self.quantity if self.entry_price > 0 else 0.0
+        self.trade_return = (self.pnl_after_fees / notional) if notional > 0 else 0.0
 
-    def roll(self, new_strike: float, new_dte: int, new_entry_price: float, roll_fee: float = 0.0):
+    def roll(self, new_strike: float, new_dte: int, new_entry_price: float,
+             new_implied_vol: float, roll_fee: float = 0.0):
         """Roll position to new strike/expiration"""
         self.rolled_count += 1
         self.strike = new_strike
         self.dte = new_dte
         self.entry_price = new_entry_price
         self.current_price = new_entry_price
+        self.implied_vol = new_implied_vol
         self.total_fees_paid += roll_fee
         self.status = "ROLLED"
         logger.info(f"🔄 Position #{self.id} ROLLED: New Strike=${new_strike:.0f}, "
@@ -455,6 +531,7 @@ class Position:
     def to_dict(self) -> Dict:
         return {
             'id': self.id,
+            'option_type': self.option_type,
             'entry_price': self.entry_price,
             'entry_time': self.entry_time.isoformat() if self.entry_time else None,
             'exit_price': self.exit_price,
@@ -464,11 +541,16 @@ class Position:
             'strike': self.strike,
             'delta': self.delta,
             'qsci': self.qsci,
+            'implied_vol': self.implied_vol,
             'pnl': self.pnl,
             'pnl_after_fees': self.pnl_after_fees,
             'total_fees_paid': self.total_fees_paid,
             'rolled_count': self.rolled_count,
-            'status': self.status
+            'status': self.status,
+            'multi_tf_score': self.multi_tf_score,
+            'sentiment_score': self.sentiment_score,
+            'regime': self.regime,
+            'trade_return': self.trade_return
         }
 
 # ============================================================================
@@ -533,64 +615,77 @@ class DrawdownTracker:
 class MonteCarloSimulator:
     """Monte Carlo simulation for strategy robustness testing"""
 
-    def __init__(self, n_simulations: int = 1000, confidence_level: float = 0.95):
+    def __init__(
+        self,
+        n_simulations: int = 1000,
+        confidence_level: float = 0.95,
+        block_size: int = 25,  # Larger blocks preserve autocorrelation
+        max_return_cap: float = 0.50,  # Cap at 50% per trade (very realistic)
+        min_return_floor: float = -0.35  # Floor at -35% (realistic for options)
+    ):
         self.n_simulations = n_simulations
         self.confidence_level = confidence_level
+        self.block_size = max(block_size, 5)
+        self.max_return_cap = max_return_cap
+        self.min_return_floor = min_return_floor
+
+    def _prepare_returns(self, trade_returns: List[float]) -> np.ndarray:
+        # Winsorize extreme returns at 2nd/98th percentile
+        arr = np.array(trade_returns)
+        if len(arr) > 20:
+            p2, p98 = np.percentile(arr, [2, 98])
+            arr = np.clip(arr, p2, p98)
+        clipped = np.clip(arr, self.min_return_floor, self.max_return_cap)
+        return clipped  # Use simple returns, not log returns for stability
+
+    def _block_bootstrap(self, log_returns: np.ndarray, n_samples: int) -> np.ndarray:
+        if len(log_returns) == 0:
+            return np.zeros(n_samples)
+
+        if len(log_returns) <= self.block_size:
+            return np.random.choice(log_returns, size=n_samples, replace=True)
+
+        samples = []
+        max_start = len(log_returns) - self.block_size
+        while len(samples) < n_samples:
+            start = np.random.randint(0, max_start + 1)
+            block = log_returns[start:start + self.block_size]
+            samples.extend(block)
+        return np.array(samples[:n_samples])
 
     def simulate_returns(self, trade_returns: List[float], n_trades: int = None) -> Dict:
-        """
-        Run Monte Carlo simulation on trade returns
-
-        Args:
-            trade_returns: List of percentage returns from each trade
-            n_trades: Number of trades to simulate (default: same as input)
-
-        Returns:
-            Dict with simulation results
-        """
         if not trade_returns or len(trade_returns) < 5:
             return {'error': 'Insufficient trade data for simulation'}
 
-        trade_returns = np.array(trade_returns)
-        n_trades = n_trades or len(trade_returns)
+        prepared_returns = self._prepare_returns(trade_returns)
+        n_trades = n_trades or len(prepared_returns)
 
-        # Store simulation results
         final_returns = []
         max_drawdowns = []
         sharpe_ratios = []
         win_rates = []
 
         for _ in range(self.n_simulations):
-            # Bootstrap sampling with replacement
-            simulated_trades = np.random.choice(trade_returns, size=n_trades, replace=True)
+            sampled = self._block_bootstrap(prepared_returns, n_trades)
+            # Use arithmetic compounding for simple returns
+            equity_curve = np.cumprod(1 + sampled)
+            final_returns.append(equity_curve[-1] - 1)
 
-            # Calculate cumulative returns
-            cumulative = np.cumprod(1 + simulated_trades)
-            final_returns.append(cumulative[-1] - 1)
-
-            # Calculate max drawdown
-            running_max = np.maximum.accumulate(cumulative)
-            drawdowns = (running_max - cumulative) / running_max
+            running_max = np.maximum.accumulate(equity_curve)
+            drawdowns = 1 - (equity_curve / np.maximum(running_max, 1e-9))
             max_drawdowns.append(np.max(drawdowns))
 
-            # Calculate Sharpe ratio (assuming daily returns)
-            if np.std(simulated_trades) > 0:
-                sharpe = np.mean(simulated_trades) / np.std(simulated_trades) * np.sqrt(252)
+            std = np.std(sampled)
+            if std > 0:
+                sharpe = np.mean(sampled) / std * np.sqrt(252)
             else:
                 sharpe = 0
             sharpe_ratios.append(sharpe)
-
-            # Win rate
-            win_rates.append(np.mean(simulated_trades > 0))
-
-        # Calculate percentiles
-        confidence_low = (1 - self.confidence_level) / 2
-        confidence_high = 1 - confidence_low
+            win_rates.append(np.mean(sampled > 0))
 
         return {
             'n_simulations': self.n_simulations,
             'n_trades': n_trades,
-            # Return statistics
             'return_mean': np.mean(final_returns) * 100,
             'return_median': np.median(final_returns) * 100,
             'return_std': np.std(final_returns) * 100,
@@ -598,43 +693,29 @@ class MonteCarloSimulator:
             'return_95th_pct': np.percentile(final_returns, 95) * 100,
             'return_worst': np.min(final_returns) * 100,
             'return_best': np.max(final_returns) * 100,
-            # Drawdown statistics
             'max_dd_mean': np.mean(max_drawdowns) * 100,
             'max_dd_median': np.median(max_drawdowns) * 100,
             'max_dd_95th_pct': np.percentile(max_drawdowns, 95) * 100,
             'max_dd_worst': np.max(max_drawdowns) * 100,
-            # Sharpe statistics
             'sharpe_mean': np.mean(sharpe_ratios),
             'sharpe_median': np.median(sharpe_ratios),
             'sharpe_5th_pct': np.percentile(sharpe_ratios, 5),
-            # Win rate statistics
             'win_rate_mean': np.mean(win_rates) * 100,
             'win_rate_5th_pct': np.percentile(win_rates, 5) * 100,
-            # Probability of profit
             'prob_profit': np.mean(np.array(final_returns) > 0) * 100,
-            'prob_beat_market': np.mean(np.array(final_returns) > 0.10) * 100,  # Beat 10%
+            'prob_beat_market': np.mean(np.array(final_returns) > 0.10) * 100,
         }
 
     def scenario_analysis(self, trade_returns: List[float], scenarios: Dict[str, Dict]) -> Dict:
-        """
-        Run scenario analysis with different market conditions
-
-        Args:
-            trade_returns: Historical trade returns
-            scenarios: Dict of scenario names to adjustment parameters
-                Example: {'Bull': {'mean_adj': 0.02}, 'Bear': {'mean_adj': -0.03}}
-        """
         results = {}
-
         for scenario_name, params in scenarios.items():
-            adjusted_returns = np.array(trade_returns) + params.get('mean_adj', 0)
+            adjusted_returns = np.array(trade_returns)
+            adjusted_returns = (adjusted_returns + params.get('mean_adj', 0))
             adjusted_returns *= params.get('vol_mult', 1.0)
-
             results[scenario_name] = self.simulate_returns(
                 adjusted_returns.tolist(),
                 n_trades=params.get('n_trades', len(trade_returns))
             )
-
         return results
 
 # ============================================================================
@@ -647,6 +728,7 @@ class QSCIBacktesterV3:
     def __init__(self):
         self.dm = BinanceDataManager(use_testnet=USE_TESTNET)
         self.fees = BinanceFees()
+        self.option_model = OptionMarketModel()
         self.positions: List[Position] = []
         self.account_balance = POSITION_CONFIG['account_balance']
         self.initial_balance = self.account_balance
@@ -659,6 +741,25 @@ class QSCIBacktesterV3:
         self.total_fees_paid = 0.0
         self.total_slippage = 0.0
         self.rolls_executed = 0
+        self.daily_realized_pnl = defaultdict(float)
+        self.daily_loss_limit_pct = 0.05  # 5% daily limit
+        self.max_portfolio_drawdown_pct = 0.20  # 20% max DD before pause
+        self.max_allowed_volatility = 0.06  # Allow trading in higher vol
+        self.trade_cooldown_hours = 4  # Shorter cooldown
+        self.consecutive_losses = 0
+        self.consecutive_loss_limit = 4  # Allow 4 consecutive losses
+        self.last_trade_timestamp: Optional[datetime] = None
+        self.max_vol_for_full_size = 0.025
+        self.trailing_stop_factor = 0.5
+        self.primary_df: Optional[pd.DataFrame] = None
+        self.multi_tf_threshold = STRATEGY_PARAMS.get('multitf_threshold', 0.15)
+        self.sentiment_threshold = STRATEGY_PARAMS.get('sentiment_filter_threshold', 0.05)
+        self.multi_tf_weights = QSCI_CONFIG.get('timeframe_weights', {})
+        self.external_sentiment_df = self._load_external_sentiment()
+        self.oos_config = OOS_CONFIG
+        self.regime_stats = defaultdict(
+            lambda: {'pnl': 0.0, 'wins': 0, 'losses': 0, 'trades': 0, 'returns': []}
+        )
 
         # NLP for sentiment
         self.vader_analyzer = None
@@ -683,22 +784,245 @@ class QSCIBacktesterV3:
 
         return dataframes
 
-    def calculate_transaction_cost(self, trade_value: float, spot_price: float,
-                                   volatility: float = None) -> Tuple[float, float]:
+    def _select_primary_dataframe(self, dataframes: Dict[str, pd.DataFrame]) -> Optional[pd.DataFrame]:
+        if PRIMARY_TIMEFRAME in dataframes:
+            return dataframes[PRIMARY_TIMEFRAME].copy()
+
+        for tf in TIMEFRAMES:
+            if tf in dataframes:
+                return dataframes[tf].copy()
+
+        if dataframes:
+            first_key = next(iter(dataframes))
+            return dataframes[first_key].copy()
+        return None
+
+    def _apply_multi_timeframe_blend(self, primary_df: pd.DataFrame,
+                                     dataframes: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+        primary_df = primary_df.sort_values('Open Time').reset_index(drop=True)
+        total_weight = 0.0
+        mtf_accumulator = np.zeros(len(primary_df))
+
+        for tf, weight in self.multi_tf_weights.items():
+            tf_df = dataframes.get(tf)
+            if tf_df is None or 'QSCI' not in tf_df:
+                continue
+            tf_local = tf_df[['Open Time', 'QSCI']].dropna().sort_values('Open Time')
+            if tf_local.empty:
+                continue
+            merged = pd.merge_asof(
+                primary_df[['Open Time']],
+                tf_local,
+                on='Open Time',
+                direction='backward'
+            )
+            col_name = f'QSCI_{tf}'
+            primary_df[col_name] = merged['QSCI']
+            mtf_accumulator += weight * merged['QSCI'].fillna(0).values
+            total_weight += weight
+
+        if total_weight > 0:
+            primary_df['MultiTF_QSCI'] = np.clip(mtf_accumulator / total_weight, -1, 1)
+        else:
+            primary_df['MultiTF_QSCI'] = primary_df.get('QSCI', 0)
+
+        return primary_df
+
+    def _load_external_sentiment(self) -> Optional[pd.DataFrame]:
+        news_file = NEWS_SENTIMENT_CONFIG.get('news_data_file')
+        if not news_file:
+            return None
+
+        path = Path(news_file)
+        if not path.exists():
+            return None
+
+        try:
+            df = pd.read_json(path)
+            if 'timestamp' not in df.columns:
+                if 'time' in df.columns:
+                    df = df.rename(columns={'time': 'timestamp'})
+                else:
+                    return None
+            sentiment_col = 'sentiment' if 'sentiment' in df.columns else None
+            if sentiment_col is None:
+                for candidate in ('score', 'sentiment_score', 'value'):
+                    if candidate in df.columns:
+                        sentiment_col = candidate
+                        break
+            if sentiment_col is None:
+                return None
+
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df = df[['timestamp', sentiment_col]].dropna()
+            df = df.rename(columns={sentiment_col: 'sentiment'})
+            df = df.sort_values('timestamp').reset_index(drop=True)
+            return df
+        except Exception as exc:
+            logger.warning(f"Sentiment file load failed: {exc}")
+            return None
+
+    def _build_sentiment_signal(self, primary_df: pd.DataFrame) -> pd.DataFrame:
+        if 'Momentum' in primary_df:
+            momentum_component = primary_df['Momentum']
+        else:
+            momentum_component = pd.Series(np.zeros(len(primary_df)), index=primary_df.index)
+
+        if 'ROC' in primary_df:
+            roc_component = primary_df['ROC']
+        else:
+            roc_component = pd.Series(np.zeros(len(primary_df)), index=primary_df.index)
+
+        price_sentiment_raw = np.tanh((roc_component.fillna(0) / 10) + (momentum_component.fillna(0) / 50))
+
+        memory = NEWS_SENTIMENT_CONFIG.get('sentiment_memory', 0.7)
+        alpha = max(1 - memory, 0.05)
+        price_sentiment_series = pd.Series(price_sentiment_raw, index=primary_df.index)
+        primary_df['Price_Sentiment'] = price_sentiment_series.ewm(alpha=alpha, adjust=False).mean()
+
+        price_weight = NEWS_SENTIMENT_CONFIG.get('price_weight', 0.4)
+        nlp_weight = NEWS_SENTIMENT_CONFIG.get('nlp_weight', 0.6)
+        weight_sum = max(price_weight + nlp_weight, 1e-3)
+
+        if self.external_sentiment_df is not None and not self.external_sentiment_df.empty:
+            merged = pd.merge_asof(
+                primary_df[['Open Time']],
+                self.external_sentiment_df,
+                left_on='Open Time',
+                right_on='timestamp',
+                direction='backward'
+            )
+            nlp_sentiment = merged['sentiment'].fillna(0)
+        else:
+            nlp_sentiment = pd.Series(np.zeros(len(primary_df)), index=primary_df.index)
+
+        blended = (
+            price_weight * primary_df['Price_Sentiment'].fillna(0) +
+            nlp_weight * nlp_sentiment.fillna(0)
+        ) / weight_sum
+
+        primary_df['Sentiment_Score'] = np.clip(blended, -1, 1)
+        return primary_df
+
+    def _apply_regime_labels(self, primary_df: pd.DataFrame) -> pd.DataFrame:
+        total_rows = len(primary_df)
+        if total_rows == 0 or total_rows < self.oos_config.get('min_samples', 0):
+            primary_df['Regime'] = 'train'
+            return primary_df
+
+        train_cut = min(int(total_rows * self.oos_config.get('train_fraction', 0.6)), total_rows)
+        val_cut = min(
+            train_cut + int(total_rows * self.oos_config.get('validation_fraction', 0.2)),
+            total_rows
+        )
+
+        regimes = np.empty(total_rows, dtype=object)
+        regimes[:] = 'train'
+        regimes[train_cut:val_cut] = 'validation'
+        regimes[val_cut:] = 'test'
+        primary_df['Regime'] = regimes
+        return primary_df
+
+    def _calibrate_thresholds(self, primary_df: pd.DataFrame):
+        train_mask = primary_df['Regime'] == 'train'
+
+        mtf_series = primary_df.loc[train_mask, 'MultiTF_QSCI'].abs().dropna()
+        if not mtf_series.empty:
+            self.multi_tf_threshold = max(
+                np.quantile(mtf_series, 0.55),
+                STRATEGY_PARAMS.get('multitf_threshold', 0.15)
+            )
+
+        sentiment_series = primary_df.loc[train_mask, 'Sentiment_Score'].abs().dropna()
+        if not sentiment_series.empty:
+            self.sentiment_threshold = max(
+                np.quantile(sentiment_series, 0.55),
+                STRATEGY_PARAMS.get('sentiment_filter_threshold', 0.05)
+            )
+
+    def prepare_primary_dataframe(self, dataframes: Dict[str, pd.DataFrame]) -> Optional[pd.DataFrame]:
+        primary_df = self._select_primary_dataframe(dataframes)
+        if primary_df is None:
+            return None
+
+        primary_df = primary_df.sort_values('Open Time').reset_index(drop=True)
+        primary_df = self._apply_multi_timeframe_blend(primary_df, dataframes)
+        primary_df = self._build_sentiment_signal(primary_df)
+        primary_df = self._apply_regime_labels(primary_df)
+        self._calibrate_thresholds(primary_df)
+
+        primary_df['MultiTF_Filter_Pass'] = (
+            primary_df['MultiTF_QSCI'].abs() >= self.multi_tf_threshold
+        )
+
+        sentiment_alignment = (
+            np.sign(primary_df['Sentiment_Score'].fillna(0)) ==
+            np.sign(primary_df['MultiTF_QSCI'].fillna(0))
+        )
+        primary_df['Sentiment_Filter_Pass'] = (
+            primary_df['Sentiment_Score'].abs() >= self.sentiment_threshold
+        ) & sentiment_alignment
+
+        return primary_df
+
+    def calculate_transaction_cost(self, trade_value: float, spread_pct: float,
+                                   is_maker: bool = False) -> Tuple[float, float]:
         """Calculate fees and slippage for a trade"""
 
-        if volatility is None:
-            volatility = 0.02  # Default 2% volatility
-
-        # Fee calculation
-        fee = trade_value * self.fees.options_trading_fee
-
-        # Slippage calculation (increases with volatility and trade size)
-        base_slippage = trade_value * self.fees.base_slippage
-        vol_slippage = trade_value * volatility * self.fees.volatility_slippage_mult
-        slippage = base_slippage + vol_slippage
-
+        fee, slippage = self.fees.calculate_total_cost(
+            trade_value,
+            spread_pct,
+            is_maker=is_maker,
+            trade_type='options'
+        )
         return fee, slippage
+
+    def should_block_new_trades(self, current_time: datetime, volatility_pct: float) -> bool:
+        if volatility_pct > self.max_allowed_volatility:
+            return True
+
+        dd_stats = self.drawdown_tracker.get_stats()
+        current_dd = dd_stats.get('current_drawdown_pct', 0) / 100
+        if current_dd >= self.max_portfolio_drawdown_pct:
+            return True
+
+        day_key = current_time.date()
+        daily_loss_limit = -self.initial_balance * self.daily_loss_limit_pct
+        if self.daily_realized_pnl.get(day_key, 0.0) <= daily_loss_limit:
+            return True
+
+        if self.last_trade_timestamp is not None:
+            hours_since = (current_time - self.last_trade_timestamp).total_seconds() / 3600
+            if hours_since < self.trade_cooldown_hours:
+                return True
+
+        if self.consecutive_losses >= self.consecutive_loss_limit and self.last_trade_timestamp:
+            if self.last_trade_timestamp.date() == current_time.date():
+                return True
+
+        return False
+
+    def record_realized_pnl(self, timestamp: datetime, pnl: float):
+        day_key = timestamp.date()
+        self.daily_realized_pnl[day_key] += pnl
+        if pnl < 0:
+            self.consecutive_losses += 1
+        else:
+            self.consecutive_losses = 0
+
+    def update_trade_statistics(self, position: Position, trade_returns: List[float]):
+        if position.entry_price > 0:
+            trade_returns.append(position.trade_return)
+
+        regime = position.regime or 'train'
+        bucket = self.regime_stats[regime]
+        bucket['pnl'] += position.pnl_after_fees
+        bucket['trades'] += 1
+        if position.pnl_after_fees > 0:
+            bucket['wins'] += 1
+        else:
+            bucket['losses'] += 1
+        bucket['returns'].append(position.trade_return)
 
     def check_rolling_needed(self, position: Position, current_dte: float) -> bool:
         """Check if position needs to be rolled"""
@@ -706,27 +1030,34 @@ class QSCIBacktesterV3:
         return current_dte <= roll_threshold and position.status == "OPEN"
 
     def execute_roll(self, position: Position, spot_price: float, current_time: datetime,
-                    volatility: float) -> bool:
+                    volatility_pct: float) -> bool:
         """Execute position roll to new expiration"""
 
         # Calculate roll cost (exit old + enter new)
         exit_value = position.current_price * position.quantity
-        exit_fee, exit_slippage = self.calculate_transaction_cost(exit_value, spot_price, volatility)
+        atr_pct = max(volatility_pct, 0.0005)
+        spread_pct = min(
+            self.option_model.base_spread + (self.option_model.vol_spread_mult * atr_pct) +
+            self.option_model.liquidity_spread,
+            0.02
+        )
+        exit_fee, exit_slippage = self.calculate_transaction_cost(exit_value, spread_pct)
 
-        # New position parameters
-        new_dte = 14  # Roll to 2 weeks out
-        new_strike = round(spot_price / 100) * 100  # ATM strike
-
-        # New entry price (ATM option ~3% of spot)
-        new_entry_price = spot_price * (0.02 + 0.01 * np.sqrt(new_dte / 30))
+        new_dte = 14
+        new_strike = round(spot_price / 100) * 100
+        new_pricing = self.option_model.estimate_fair_value(spot_price, new_strike, new_dte, atr_pct)
+        new_entry_price = max(new_pricing['mid'], new_pricing['bid'])
         new_entry_value = new_entry_price * position.quantity
 
-        entry_fee, entry_slippage = self.calculate_transaction_cost(new_entry_value, spot_price, volatility)
+        entry_fee, entry_slippage = self.calculate_transaction_cost(
+            new_entry_value,
+            new_pricing['spread_pct']
+        )
 
         total_roll_cost = exit_fee + exit_slippage + entry_fee + entry_slippage
 
         # Execute roll
-        position.roll(new_strike, new_dte, new_entry_price, total_roll_cost)
+        position.roll(new_strike, new_dte, new_entry_price, new_pricing['iv'], total_roll_cost)
 
         self.total_fees_paid += exit_fee + entry_fee
         self.total_slippage += exit_slippage + entry_slippage
@@ -735,80 +1066,159 @@ class QSCIBacktesterV3:
         logger.info(f"🔄 Roll executed: Total cost ${total_roll_cost:.2f}")
         return True
 
-    def calculate_position_size(self, qsci: float, delta: float, spot_price: float) -> int:
-        """Calculate position size with Kelly-inspired sizing"""
+    def calculate_position_size(self, qsci: float, delta: float, option_price: float,
+                                spot_price: float, volatility_pct: float) -> int:
+        """Calculate position size with conviction-based scaling"""
+
         risk_pct = POSITION_CONFIG['risk_per_trade']
         risk_amount = self.account_balance * risk_pct
 
-        # Signal-based multiplier (stronger signal = larger position)
-        signal_mult = 0.5 + abs(qsci)  # 0.5x to 1.5x
+        # Conviction multiplier: stronger signals get bigger size
+        conviction = abs(qsci)
+        if conviction > 0.5:
+            signal_mult = 1.0 + (conviction - 0.5) * 0.8  # Up to 1.4x for strong signals
+        else:
+            signal_mult = 0.7 + conviction * 0.6  # 0.7x to 1.0x for weaker signals
 
-        # Delta adjustment (ATM = full size)
-        delta_mult = 1 - abs(0.5 - delta)
+        # Delta efficiency: prefer 0.4-0.5 delta for best leverage
+        delta_efficiency = 1.0 - abs(abs(delta) - 0.45) * 0.5
+        delta_mult = max(0.6, min(1.2, delta_efficiency))
 
-        # Option price estimate
-        option_price = spot_price * (0.02 + 0.01 * delta)
+        # Lower vol = more size, higher vol = less size
+        vol_penalty = np.clip(0.03 / max(volatility_pct, 0.005), 0.5, 1.5)
 
-        # Position size
-        raw_size = (risk_amount * signal_mult * delta_mult) / option_price
+        # Reduce size in drawdown
+        dd_stats = self.drawdown_tracker.get_stats()
+        dd_pct = dd_stats.get('current_drawdown_pct', 0) / 100
+        dd_penalty = max(0.4, 1.0 - dd_pct * 1.5)
 
-        # Apply limits
+        risk_amount *= signal_mult * delta_mult * vol_penalty * dd_penalty
+
+        option_price = option_price if option_price > 0 else spot_price * 0.02
+        raw_size = risk_amount / option_price
         max_size = self.account_balance * POSITION_CONFIG['max_position_size_pct'] / option_price
 
         return max(1, min(int(raw_size), int(max_size)))
 
-    def simulate_trade(self, qsci: float, spot_price: float, volatility: float,
-                      current_time: datetime, dte: int = 14) -> bool:
-        """Simulate trade entry with transaction costs"""
+    def simulate_trade(
+        self,
+        qsci: float,
+        spot_price: float,
+        volatility_pct: float,
+        current_time: datetime,
+        atr_value: float,
+        dte: int = 14,
+        multi_tf_score: Optional[float] = None,
+        sentiment_score: Optional[float] = None,
+        multi_tf_ok: bool = True,
+        sentiment_ok: bool = True,
+        regime: str = 'train',
+        adx_value: float = 0.0,
+        trend_direction: float = 0.0,
+        volume_signal: float = 0.0
+    ) -> bool:
+        """Simulate directional trade: CALL for bullish, PUT for bearish"""
 
-        # Check concurrent positions
         open_positions = [p for p in self.positions if p.status == "OPEN"]
         if len(open_positions) >= POSITION_CONFIG['max_concurrent_positions']:
             return False
 
-        # Entry criteria
-        if qsci < ENTRY_CRITERIA['min_qsci_signal']:
+        # Require minimum signal strength (absolute value)
+        abs_qsci = abs(qsci)
+        if abs_qsci < ENTRY_CRITERIA['min_qsci_signal']:
             return False
 
-        delta = 0.5  # ATM
-        strike = round(spot_price / 100) * 100
+        # Determine direction: positive QSCI = bullish (CALL), negative = bearish (PUT)
+        option_type = "CALL" if qsci > 0 else "PUT"
 
-        # Calculate position size
-        quantity = self.calculate_position_size(qsci, delta, spot_price)
+        # ADX trend strength filter - only trade when trend exists
+        min_adx = ENTRY_CRITERIA.get('min_adx', 20)
+        if adx_value > 0 and adx_value < min_adx:
+            return False
 
-        # Option pricing
-        time_value = spot_price * 0.02 * np.sqrt(dte / 30)
-        delta_premium = spot_price * (0.01 + 0.02 * delta)
-        entry_price = time_value + delta_premium
+        # Trend alignment filter - for high conviction trades
+        if ENTRY_CRITERIA.get('require_trend_alignment', True) and abs(trend_direction) > 0.1:
+            # CALL needs positive trend, PUT needs negative trend
+            if option_type == "CALL" and trend_direction < 0:
+                return False
+            if option_type == "PUT" and trend_direction > 0:
+                return False
 
-        # Calculate transaction costs
-        trade_value = entry_price * quantity
-        fee, slippage = self.calculate_transaction_cost(trade_value, spot_price, volatility)
+        # Volume confirmation filter (positive volume = bullish)
+        if STRATEGY_PARAMS.get('require_volume_confirmation'):
+            if option_type == "CALL" and volume_signal < -0.2:
+                return False
+            if option_type == "PUT" and volume_signal > 0.2:
+                return False
 
-        # Adjust entry price for slippage (pay more)
-        adjusted_entry = entry_price * (1 + self.fees.base_slippage)
+        if STRATEGY_PARAMS.get('use_multi_timeframe') and not multi_tf_ok:
+            return False
 
-        # Create position
+        if STRATEGY_PARAMS.get('use_sentiment_filter') and not sentiment_ok:
+            return False
+
+        atr_pct = atr_value / spot_price if spot_price > 0 else volatility_pct
+        if self.should_block_new_trades(current_time, atr_pct):
+            return False
+
+        # For very strong signals, bypass some filters
+        is_strong_signal = abs_qsci >= 0.45
+
+        if STRATEGY_PARAMS.get('only_strong_signals') and not is_strong_signal:
+            return False
+
+        if dte < ENTRY_CRITERIA.get('min_dte', 5) or dte > ENTRY_CRITERIA.get('max_dte', 21):
+            return False
+
+        # Strike selection: OTM for better leverage, adjust by signal strength
+        otm_pct = 0.02 + abs_qsci * 0.02  # 2-4% OTM based on conviction
+        if option_type == "CALL":
+            strike = round(spot_price * (1 + otm_pct) / 100) * 100
+        else:
+            strike = round(spot_price * (1 - otm_pct) / 100) * 100
+
+        pricing = self.option_model.estimate_fair_value(
+            spot_price, strike, dte, atr_pct, option_type
+        )
+        option_price = pricing['mid']
+        delta = pricing['delta']
+
+        quantity = self.calculate_position_size(
+            abs_qsci, abs(delta), option_price, spot_price, atr_pct
+        )
+        if quantity <= 0:
+            return False
+
+        trade_value = option_price * quantity
+        fee, slippage = self.calculate_transaction_cost(trade_value, pricing['spread_pct'])
+
         self.position_counter += 1
         position = Position(
             id=self.position_counter,
-            entry_price=adjusted_entry,
+            entry_price=option_price,
             quantity=quantity,
             dte=dte,
             strike=strike,
             delta=delta,
             qsci=qsci,
-            entry_time=current_time
+            implied_vol=pricing['iv'],
+            option_type=option_type,
+            entry_time=current_time,
+            multi_tf_score=multi_tf_score if multi_tf_score is not None else qsci,
+            sentiment_score=sentiment_score if sentiment_score is not None else 0.0,
+            regime=regime
         )
         position.total_fees_paid = fee + slippage
 
         self.positions.append(position)
         self.total_fees_paid += fee
         self.total_slippage += slippage
+        self.last_trade_timestamp = current_time
 
-        logger.info(f"✓ Position #{self.position_counter}: QSCI={qsci:.3f}, "
-                   f"Price=${adjusted_entry:.2f}, Qty={quantity}, "
-                   f"Fees=${fee + slippage:.2f}")
+        logger.info(
+            f"✓ Position #{self.position_counter}: {option_type} QSCI={qsci:.3f}, "
+            f"Price=${option_price:.2f}, Qty={quantity}, Delta={delta:.2f}, Fees=${fee + slippage:.2f}"
+        )
 
         return True
 
@@ -826,7 +1236,9 @@ class QSCIBacktesterV3:
             logger.error("No data loaded")
             return
 
-        primary_df = dataframes.get('4h', pd.DataFrame())
+        self.primary_df = self.prepare_primary_dataframe(dataframes)
+        primary_df = self.primary_df if self.primary_df is not None else pd.DataFrame()
+
         if len(primary_df) == 0:
             logger.error("No primary timeframe data")
             return
@@ -842,98 +1254,135 @@ class QSCIBacktesterV3:
 
         # Simulation loop
         for idx in range(60, len(primary_df)):
-            spot_price = primary_df.iloc[idx]['Close']
-            current_time = primary_df.iloc[idx]['Open Time']
+            row = primary_df.iloc[idx]
+            spot_price = row['Close']
+            current_time = row['Open Time']
 
-            # Get volatility (NATR)
-            volatility = primary_df.iloc[idx]['NATR'] / 100 if 'NATR' in primary_df else 0.02
+            volatility = row['NATR'] / 100 if 'NATR' in row else 0.02
+            atr_value = row['ATR'] if 'ATR' in row else spot_price * 0.02
+            atr_pct = atr_value / spot_price if spot_price > 0 else volatility
 
-            # Get QSCI from precomputed signals
-            qsci = primary_df.iloc[idx]['QSCI'] if 'QSCI' in primary_df else 0.0
+            qsci = row['QSCI'] if 'QSCI' in row else 0.0
+            multi_tf_score = row['MultiTF_QSCI'] if 'MultiTF_QSCI' in row else qsci
+            multi_tf_pass = bool(row.get('MultiTF_Filter_Pass', True))
+            sentiment_score = row.get('Sentiment_Score', 0.0)
+            sentiment_pass = bool(row.get('Sentiment_Filter_Pass', True))
+            current_regime = row.get('Regime', 'train')
             qsci_values.append(qsci)
 
             # ================== POSITION MANAGEMENT ==================
             for pos in self.positions:
-                if pos.status == "OPEN":
-                    # Update DTE
-                    pos.dte = max(0, pos.dte - (1/6))
+                if pos.status != "OPEN":
+                    continue
 
-                    # Check if rolling needed
-                    if self.check_rolling_needed(pos, pos.dte):
-                        if pos.dte <= EXIT_RULES.get('mandatory_close_dte', 3):
-                            # Too late to roll, close position
-                            fee, slippage = self.calculate_transaction_cost(
-                                pos.current_price * pos.quantity, spot_price, volatility
-                            )
-                            pos.close(pos.current_price, fee + slippage)
-                            self.trades_log.append(pos.to_dict())
-                            self.account_balance += pos.pnl_after_fees
+                pos.dte = max(0, pos.dte - (1/6))
+                current_dte = max(pos.dte, 0.25)
 
-                            if pos.pnl > 0:
-                                trade_returns.append(pos.pnl_after_fees / (pos.entry_price * pos.quantity))
-                            else:
-                                trade_returns.append(pos.pnl_after_fees / (pos.entry_price * pos.quantity))
+                pricing_snapshot = self.option_model.estimate_fair_value(
+                    spot_price, pos.strike, current_dte, atr_pct, pos.option_type
+                )
+                blended_iv = pricing_snapshot['iv'] if pos.implied_vol == 0 else (
+                    0.5 * pos.implied_vol + 0.5 * pricing_snapshot['iv']
+                )
+                mid_price, delta = self.option_model.price_option(
+                    spot_price, pos.strike, current_dte, blended_iv, pos.option_type
+                )
+                spread_for_close = pricing_snapshot['spread_pct']
+                mark_price = max(mid_price, pricing_snapshot['bid'])
+                pos.implied_vol = blended_iv
+                pos.delta = delta
+                pos.update_price(max(mark_price, 0.001))
 
-                            logger.info(f"⏰ Position #{pos.id} EXPIRED: "
-                                       f"P&L=${pos.pnl_after_fees:.2f}")
-                            continue
-                        else:
-                            # Execute roll
-                            self.execute_roll(pos, spot_price, current_time, volatility)
-                            pos.status = "OPEN"  # Reset status after roll
-
-                    # Update position price (Greeks-based)
-                    spot_change = spot_price - pos.strike
-                    delta_pnl = pos.delta * spot_change
-                    theta_decay = pos.entry_price * 0.02 * (1/6) / np.sqrt(max(pos.dte, 1))
-                    gamma_effect = 0.01 * (spot_change / max(pos.strike, 1)) ** 2 * pos.entry_price
-
-                    new_price = pos.entry_price + delta_pnl - theta_decay + gamma_effect
-                    new_price = max(0.001, new_price)
-                    pos.update_price(new_price)
-
-                    # Check exit conditions
-                    profit_pct = pos.pnl / (pos.entry_price * pos.quantity)
-                    atr = primary_df.iloc[idx]['ATR'] if 'ATR' in primary_df else spot_price * 0.02
-
-                    tp_threshold = 0.30 + (atr / spot_price)
-                    sl_threshold = -0.20 - (atr / spot_price) / 2
-
-                    # Take Profit
-                    if profit_pct > tp_threshold:
+                if self.check_rolling_needed(pos, pos.dte):
+                    if pos.dte <= EXIT_RULES.get('mandatory_close_dte', 3):
                         fee, slippage = self.calculate_transaction_cost(
-                            new_price * pos.quantity, spot_price, volatility
+                            pos.current_price * pos.quantity,
+                            spread_for_close
                         )
-                        pos.close(new_price, fee + slippage)
+                        pos.close(pos.current_price, fee + slippage)
                         self.trades_log.append(pos.to_dict())
                         self.account_balance += pos.pnl_after_fees
-                        trade_returns.append(profit_pct)
-
+                        self.update_trade_statistics(pos, trade_returns)
                         self.total_fees_paid += fee
                         self.total_slippage += slippage
-
-                        logger.info(f"✓ Position #{pos.id} TP: ${pos.pnl_after_fees:.2f} "
-                                   f"({profit_pct*100:.1f}%)")
-
-                    # Stop Loss
-                    elif profit_pct < sl_threshold:
-                        fee, slippage = self.calculate_transaction_cost(
-                            new_price * pos.quantity, spot_price, volatility
+                        self.record_realized_pnl(current_time, pos.pnl_after_fees)
+                        logger.info(
+                            f"⏰ Position #{pos.id} EXPIRED: P&L=${pos.pnl_after_fees:.2f}"
                         )
-                        pos.close(new_price, fee + slippage)
-                        self.trades_log.append(pos.to_dict())
-                        self.account_balance += pos.pnl_after_fees
-                        trade_returns.append(profit_pct)
+                        continue
 
-                        self.total_fees_paid += fee
-                        self.total_slippage += slippage
+                    self.execute_roll(pos, spot_price, current_time, atr_pct)
+                    pos.status = "OPEN"
+                    continue
 
-                        logger.info(f"✗ Position #{pos.id} SL: ${pos.pnl_after_fees:.2f} "
-                                   f"({profit_pct*100:.1f}%)")
+                profit_pct = pos.pnl / (pos.entry_price * pos.quantity)
+
+                # Asymmetric R/R: bigger TP, tighter SL
+                tp_threshold = EXIT_RULES.get('tp1_target', 1.5) * atr_pct
+                # Tighter stop for losers, scale SL with signal strength
+                sl_base = EXIT_RULES.get('sl_multiplier', 1.2) * atr_pct
+                sl_threshold = -sl_base * max(0.6, min(1.0, 1.0 - abs(pos.qsci) * 0.3))
+
+                # Enhanced trailing stop with momentum
+                protective_exit = False
+                trailing_activation = EXIT_RULES.get('trailing_activation', 0.8) * atr_pct
+                trailing_distance = EXIT_RULES.get('trailing_distance', 0.35)
+
+                if pos.peak_unrealized > 0:
+                    peak_pct = pos.peak_unrealized / (pos.entry_price * pos.quantity)
+                    give_back = peak_pct - profit_pct
+                    # Tighter trailing for big winners
+                    dynamic_trail = trailing_distance * (1.0 - min(peak_pct * 0.5, 0.3))
+                    if peak_pct > trailing_activation and give_back >= peak_pct * dynamic_trail:
+                        protective_exit = True
+
+                exit_reason = None
+                if profit_pct >= tp_threshold:
+                    exit_reason = "TP"
+                elif profit_pct <= sl_threshold:
+                    exit_reason = "SL"
+                elif protective_exit:
+                    exit_reason = "TRAIL"
+
+                if exit_reason:
+                    fee, slippage = self.calculate_transaction_cost(
+                        pos.current_price * pos.quantity,
+                        spread_for_close
+                    )
+                    pos.close(pos.current_price, fee + slippage)
+                    self.trades_log.append(pos.to_dict())
+                    self.account_balance += pos.pnl_after_fees
+                    self.update_trade_statistics(pos, trade_returns)
+                    self.total_fees_paid += fee
+                    self.total_slippage += slippage
+                    self.record_realized_pnl(current_time, pos.pnl_after_fees)
+                    logger.info(
+                        f"{exit_reason} Position #{pos.id}: ${pos.pnl_after_fees:.2f} "
+                        f"({profit_pct*100:.1f}%)"
+                    )
 
             # ================== NEW ENTRIES ==================
-            if idx % 6 == 0:  # Check every ~day
-                self.simulate_trade(qsci, spot_price, volatility, current_time)
+            if idx % 3 == 0:  # Check more frequently for opportunities
+                # Get additional filters from row
+                adx_val = row.get('ADX', 0.0) if 'ADX' in row else 0.0
+                trend_dir = row.get('Trend_Signal', 0.0) if 'Trend_Signal' in row else 0.0
+                vol_sig = row.get('Volume_Signal', 0.0) if 'Volume_Signal' in row else 0.0
+
+                self.simulate_trade(
+                    qsci,
+                    spot_price,
+                    volatility,
+                    current_time,
+                    atr_value,
+                    multi_tf_score=multi_tf_score,
+                    sentiment_score=sentiment_score,
+                    multi_tf_ok=multi_tf_pass,
+                    sentiment_ok=sentiment_pass,
+                    regime=current_regime,
+                    adx_value=adx_val,
+                    trend_direction=trend_dir,
+                    volume_signal=vol_sig
+                )
 
             # ================== UPDATE DRAWDOWN ==================
             open_pnl = sum(p.pnl for p in self.positions if p.status == "OPEN")
@@ -942,19 +1391,34 @@ class QSCIBacktesterV3:
 
         # Close remaining positions
         final_spot = primary_df.iloc[-1]['Close']
+        final_time = primary_df.iloc[-1]['Open Time']
         final_volatility = primary_df.iloc[-1]['NATR'] / 100 if 'NATR' in primary_df else 0.02
+        final_atr = primary_df.iloc[-1]['ATR'] if 'ATR' in primary_df else final_spot * 0.02
+        final_atr_pct = final_atr / final_spot if final_spot > 0 else final_volatility
 
         for pos in self.positions:
             if pos.status == "OPEN":
-                fee, slippage = self.calculate_transaction_cost(
-                    pos.current_price * pos.quantity, final_spot, final_volatility
+                pricing_snapshot = self.option_model.estimate_fair_value(
+                    final_spot, pos.strike, max(pos.dte, 0.25), final_atr_pct,
+                    pos.option_type
                 )
-                pos.close(pos.current_price, fee + slippage)
+                mid_price, _ = self.option_model.price_option(
+                    final_spot, pos.strike, max(pos.dte, 0.25),
+                    pricing_snapshot['iv'], pos.option_type
+                )
+                mark_price = max(mid_price, pricing_snapshot['bid'])
+                pos.update_price(mark_price)
+                fee, slippage = self.calculate_transaction_cost(
+                    mark_price * pos.quantity,
+                    pricing_snapshot['spread_pct']
+                )
+                pos.close(mark_price, fee + slippage)
                 self.trades_log.append(pos.to_dict())
                 self.account_balance += pos.pnl_after_fees
-
-                if pos.entry_price > 0:
-                    trade_returns.append(pos.pnl_after_fees / (pos.entry_price * pos.quantity))
+                self.total_fees_paid += fee
+                self.total_slippage += slippage
+                self.record_realized_pnl(final_time, pos.pnl_after_fees)
+                self.update_trade_statistics(pos, trade_returns)
 
         # ================== MONTE CARLO SIMULATION ==================
         logger.info("\n" + "="*80)
@@ -962,6 +1426,7 @@ class QSCIBacktesterV3:
         logger.info("="*80)
 
         mc_results = {}
+        scenario_results = {}
         if trade_returns:
             mc_results = self.monte_carlo.simulate_returns(trade_returns)
 
@@ -1019,6 +1484,18 @@ class QSCIBacktesterV3:
         logger.info(f"Max DD Duration: {dd_stats['max_drawdown_duration']} periods")
         logger.info(f"Current Drawdown: {dd_stats['current_drawdown_pct']:.1f}%")
 
+        oos_summary = self.generate_oos_summary()
+        if oos_summary:
+            logger.info(f"\n🧪 OOS SPLIT PERFORMANCE:")
+            for phase in ['train', 'validation', 'test']:
+                stats = oos_summary.get(phase)
+                if not stats:
+                    continue
+                logger.info(
+                    f"  {phase.title():>10}: Trades={stats['trades']}, P&L=${stats['pnl']:.2f}, "
+                    f"Win%={stats['win_rate']:.1f}%, Avg Trade={stats['avg_return']:.2f}%"
+                )
+
         if mc_results and 'error' not in mc_results:
             logger.info(f"\n🎲 MONTE CARLO SIMULATION ({mc_results['n_simulations']} runs):")
             logger.info(f"Expected Return: {mc_results['return_mean']:.1f}%")
@@ -1044,6 +1521,22 @@ class QSCIBacktesterV3:
         total_return = (self.account_balance - self.initial_balance) / self.initial_balance * 100
         logger.info(f"Total Return: {total_return:.2f}%")
         logger.info("="*80)
+
+    def generate_oos_summary(self) -> Dict[str, Dict[str, float]]:
+        summary = {}
+        for regime, stats in self.regime_stats.items():
+            trades = stats['trades']
+            if trades == 0:
+                continue
+            win_rate = (stats['wins'] / trades) * 100 if trades else 0
+            avg_return = np.mean(stats['returns']) * 100 if stats['returns'] else 0
+            summary[regime] = {
+                'trades': trades,
+                'pnl': stats['pnl'],
+                'win_rate': win_rate,
+                'avg_return': avg_return
+            }
+        return summary
 
 # ============================================================================
 # MAIN

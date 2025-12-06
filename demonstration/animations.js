@@ -12,7 +12,7 @@ gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
 const modalData = {
     // Hero Stats
     'indicators': {
-        icon: '📊',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4ca.svg" alt="bar chart" style="width: 32px; height: 32px;" />',
         title: '15+ Technical Indicators',
         content: `
             <h3>Momentum Indicators (35% weight)</h3>
@@ -46,7 +46,7 @@ const modalData = {
         `
     },
     'timeframes': {
-        icon: '⏱️',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/23f1.svg" alt="stopwatch" style="width: 32px; height: 32px;" />',
         title: '7 Timeframe Analysis',
         content: `
             <h3>Multi-Timeframe Composite (MTC)</h3>
@@ -67,7 +67,7 @@ const modalData = {
         `
     },
     'categories': {
-        icon: '📁',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4c1.svg" alt="folder" style="width: 32px; height: 32px;" />',
         title: '5 Signal Categories',
         content: `
             <h3>Each Timeframe Signal Composition</h3>
@@ -83,7 +83,7 @@ const modalData = {
         `
     },
     'equations': {
-        icon: '🧮',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f9ee.svg" alt="abacus" style="width: 32px; height: 32px;" />',
         title: '12 Core Equations',
         content: `
             <h3>Master QSCI Formula</h3>
@@ -108,7 +108,7 @@ const modalData = {
 
     // Formula Breakdowns
     'qsci-detail': {
-        icon: '✨',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/2728.svg" alt="sparkles" style="width: 32px; height: 32px;" />',
         title: 'QSCI Master Formula Explained',
         content: `
             <div class="formula-highlight">QSCI = ω × MTC + (1 - ω) × NS × V_adj × Θ_weight</div>
@@ -128,7 +128,7 @@ const modalData = {
         `
     },
     'mtc-detail': {
-        icon: '📊',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4ca.svg" alt="bar chart" style="width: 32px; height: 32px;" />',
         title: 'Multi-Timeframe Composite (MTC)',
         content: `
             <div class="formula-highlight">MTC = Σ(αᵢ × TFᵢ) = 0.25×TF_4h + 0.20×TF_2h + ... + 0.05×TF_1m</div>
@@ -154,7 +154,7 @@ const modalData = {
         `
     },
     'tf-detail': {
-        icon: '📈',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4c8.svg" alt="chart" style="width: 32px; height: 32px;" />',
         title: 'Timeframe Signal (TFᵢ)',
         content: `
             <div class="formula-highlight">TFᵢ = 0.35M + 0.30T + 0.15V + 0.10σ + 0.10P</div>
@@ -172,7 +172,7 @@ const modalData = {
         `
     },
     'ns-detail': {
-        icon: '📰',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4f0.svg" alt="newspaper" style="width: 32px; height: 32px;" />',
         title: 'News Sentiment (NS)',
         content: `
             <div class="formula-highlight">NS = Σ(wₛ × e^(-λt) × S_nlp)</div>
@@ -196,7 +196,7 @@ const modalData = {
         `
     },
     'vadj-detail': {
-        icon: '🌊',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f30a.svg" alt="wave" style="width: 32px; height: 32px;" />',
         title: 'Volatility Adjustment (V_adj)',
         content: `
             <div class="formula-highlight">V_adj = (σ_impl / σ_hist) × √(DTE/30)</div>
@@ -217,7 +217,7 @@ const modalData = {
         `
     },
     'theta-detail': {
-        icon: 'Θ',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4b9.svg" alt="theta" style="width: 32px; height: 32px;" />',
         title: 'Theta Decay Weight (Θ_weight)',
         content: `
             <div class="formula-highlight">Θ_weight = 1 - (1/DTE) × |K-S|/S × M_f</div>
@@ -242,7 +242,7 @@ const modalData = {
 
     // Individual Indicator Details
     'rsi-detail': {
-        icon: '📊',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4ca.svg" alt="bar chart" style="width: 32px; height: 32px;" />',
         title: 'RSI Signal Calculation',
         content: `
             <h3>Base RSI Formula</h3>
@@ -261,7 +261,7 @@ const modalData = {
         `
     },
     'macd-detail': {
-        icon: '📈',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4c8.svg" alt="chart" style="width: 32px; height: 32px;" />',
         title: 'MACD Signal Calculation',
         content: `
             <h3>Base MACD Formula</h3>
@@ -283,7 +283,7 @@ const modalData = {
 
     // Greek Details
     'delta-detail': {
-        icon: 'Δ',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4b9.svg" alt="delta" style="width: 32px; height: 32px;" />',
         title: 'Delta (Δ) - Price Sensitivity',
         content: `
             <h3>Delta Formula</h3>
@@ -303,7 +303,7 @@ const modalData = {
         `
     },
     'theta-greek-detail': {
-        icon: 'Θ',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4b9.svg" alt="theta" style="width: 32px; height: 32px;" />',
         title: 'Theta (Θ) - Time Decay',
         content: `
             <h3>Theta Formula</h3>
@@ -323,7 +323,7 @@ const modalData = {
 
     // Performance Details
     'winrate-detail': {
-        icon: '🎯',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f3af.svg" alt="target" style="width: 32px; height: 32px;" />',
         title: 'Win Rate Analysis',
         content: `
             <h3>Win Rate Calculation</h3>
@@ -349,7 +349,7 @@ const modalData = {
         `
     },
     'sharpe-detail': {
-        icon: '📈',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4c8.svg" alt="chart" style="width: 32px; height: 32px;" />',
         title: 'Sharpe Ratio',
         content: `
             <h3>Sharpe Ratio Formula</h3>
@@ -372,7 +372,7 @@ const modalData = {
         `
     },
     'drawdown-detail': {
-        icon: '📉',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4c9.svg" alt="chart down" style="width: 32px; height: 32px;" />',
         title: 'Maximum Drawdown',
         content: `
             <h3>Drawdown Calculation</h3>
@@ -394,7 +394,7 @@ const modalData = {
         `
     },
     'profit-detail': {
-        icon: '💰',
+        icon: '<img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4b0.svg" alt="money bag" style="width: 32px; height: 32px;" />',
         title: 'Profit Factor',
         content: `
             <h3>Profit Factor Formula</h3>
@@ -429,7 +429,7 @@ function openModal(dataKey) {
     const data = modalData[dataKey];
     if (!data) return;
 
-    modalIcon.textContent = data.icon;
+    modalIcon.innerHTML = data.icon;
     modalTitle.textContent = data.title;
     modalBody.innerHTML = data.content;
 

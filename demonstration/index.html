@@ -43,7 +43,7 @@
             <a href="#flow">Pipeline</a>
             <a href="#performance">Results</a>
         </div>
-        <button class="mobile-menu-btn" id="mobile-menu-btn">☰</button>
+        <button class="mobile-menu-btn" id="mobile-menu-btn"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/2630.svg" alt="menu" class="icon-inline" /></button>
     </nav>
 
     <!-- Hero Section -->
@@ -213,12 +213,10 @@
             <div class="equations-grid">
                 <!-- Momentum Equations -->
                 <div class="equation-category">
-                    <h3 class="category-title">
-                        <span class="cat-icon">⚡</span>
-                        Momentum Indicators (35%)
-                    </h3>
-
-                    <div class="equation-card" data-expand="rsi-detail">
+                <h3 class="category-title">
+                    <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/26a1.svg" alt="lightning" class="cat-icon" />
+                    Momentum Indicators (35%)
+                </h3>                    <div class="equation-card" data-expand="rsi-detail">
                         <div class="eq-name">RSI Signal</div>
                         <div class="eq-formula">RSI<sub>signal</sub> = (RSI - 50) / 50</div>
                         <div class="eq-range">Output: [-1, 1]</div>
@@ -257,12 +255,10 @@
 
                 <!-- Trend Equations -->
                 <div class="equation-category">
-                    <h3 class="category-title">
-                        <span class="cat-icon">📈</span>
-                        Trend Indicators (30%)
-                    </h3>
-
-                    <div class="equation-card" data-expand="macd-detail">
+                <h3 class="category-title">
+                    <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4c8.svg" alt="chart" class="cat-icon" />
+                    Trend Indicators (30%)
+                </h3>                    <div class="equation-card" data-expand="macd-detail">
                         <div class="eq-name">MACD Signal</div>
                         <div class="eq-formula">MACD<sub>norm</sub> = tanh((MACD - Signal) / ATR × 2)</div>
                         <div class="eq-range">ATR-normalized divergence</div>
@@ -295,12 +291,10 @@
 
                 <!-- Volume Equations -->
                 <div class="equation-category">
-                    <h3 class="category-title">
-                        <span class="cat-icon">📊</span>
-                        Volume Indicators (15%)
-                    </h3>
-
-                    <div class="equation-card" data-expand="obv-detail">
+                <h3 class="category-title">
+                    <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4ca.svg" alt="bar chart" class="cat-icon" />
+                    Volume Indicators (15%)
+                </h3>                    <div class="equation-card" data-expand="obv-detail">
                         <div class="eq-name">OBV Trend</div>
                         <div class="eq-formula">OBV<sub>signal</sub> = tanh((OBV - EMA(OBV,20)) / |EMA| × 10)</div>
                         <div class="eq-range">Momentum of accumulation</div>
@@ -322,12 +316,10 @@
 
                 <!-- Volatility Equations -->
                 <div class="equation-category">
-                    <h3 class="category-title">
-                        <span class="cat-icon">🌊</span>
-                        Volatility Indicators (10%)
-                    </h3>
-
-                    <div class="equation-card" data-expand="bb-detail">
+                <h3 class="category-title">
+                    <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f30a.svg" alt="wave" class="cat-icon" />
+                    Volatility Indicators (10%)
+                </h3>                    <div class="equation-card" data-expand="bb-detail">
                         <div class="eq-name">Bollinger Band Position</div>
                         <div class="eq-formula">BB<sub>pos</sub> = 2×(P - Lower) / (Upper - Lower) - 1</div>
                         <div class="eq-formula-sub">BB<sub>signal</sub> = -tanh(BB<sub>pos</sub> × 1.5)</div>
@@ -350,12 +342,10 @@
 
                 <!-- Pattern Equations -->
                 <div class="equation-category">
-                    <h3 class="category-title">
-                        <span class="cat-icon">🔮</span>
-                        Pattern Analysis (10%)
-                    </h3>
-
-                    <div class="equation-card" data-expand="pattern-detail">
+                <h3 class="category-title">
+                    <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f52e.svg" alt="crystal ball" class="cat-icon" />
+                    Pattern Analysis (10%)
+                </h3>                    <div class="equation-card" data-expand="pattern-detail">
                         <div class="eq-name">Trend Structure</div>
                         <div class="eq-formula">Uptrend = (HH_count + HL_count) / (2 × lookback)</div>
                         <div class="eq-formula-sub">Downtrend = (LH_count + LL_count) / (2 × lookback)</div>
@@ -365,12 +355,10 @@
 
                 <!-- Options Greeks -->
                 <div class="equation-category">
-                    <h3 class="category-title">
-                        <span class="cat-icon">Δ</span>
-                        Options Greeks
-                    </h3>
-
-                    <div class="equation-card" data-expand="delta-detail">
+                <h3 class="category-title">
+                    <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4b9.svg" alt="delta" class="cat-icon" />
+                    Options Greeks
+                </h3>                    <div class="equation-card" data-expand="delta-detail">
                         <div class="eq-name">Delta (Δ)</div>
                         <div class="eq-formula">Δ = ∂V/∂S = N(d₁)</div>
                         <div class="eq-formula-sub">d₁ = [ln(S/K) + (r + σ²/2)T] / (σ√T)</div>
@@ -398,12 +386,10 @@
 
                 <!-- Composite Formulas -->
                 <div class="equation-category full-width">
-                    <h3 class="category-title">
-                        <span class="cat-icon">∑</span>
-                        Composite Signal Aggregation
-                    </h3>
-
-                    <div class="equation-card large" data-expand="momentum-composite-detail">
+                <h3 class="category-title">
+                    <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/2211.svg" alt="sum" class="cat-icon" />
+                    Composite Signal Aggregation
+                </h3>                    <div class="equation-card large" data-expand="momentum-composite-detail">
                         <div class="eq-name">Momentum Composite (M)</div>
                         <div class="eq-formula">M = 0.25×RSI<sub>sig</sub> + 0.20×StochRSI<sub>sig</sub> + 0.15×WillR<sub>sig</sub> + 0.15×MFI<sub>sig</sub> + 0.15×CCI<sub>sig</sub> + 0.10×UO<sub>sig</sub></div>
                     </div>
@@ -438,10 +424,10 @@
             </div>
 
             <div class="indicators-tabs">
-                <button class="tab-btn active" data-tab="momentum">⚡ Momentum</button>
-                <button class="tab-btn" data-tab="trend">📈 Trend</button>
-                <button class="tab-btn" data-tab="volume">📊 Volume</button>
-                <button class="tab-btn" data-tab="volatility">🌊 Volatility</button>
+                <button class="tab-btn active" data-tab="momentum"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/26a1.svg" alt="lightning" class="icon-inline" /> Momentum</button>
+                <button class="tab-btn" data-tab="trend"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4c8.svg" alt="chart" class="icon-inline" /> Trend</button>
+                <button class="tab-btn" data-tab="volume"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4ca.svg" alt="bar chart" class="icon-inline" /> Volume</button>
+                <button class="tab-btn" data-tab="volatility"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f30a.svg" alt="wave" class="icon-inline" /> Volatility</button>
             </div>
 
             <div class="indicators-content">
@@ -708,7 +694,7 @@
             <div class="flow-pipeline">
                 <div class="flow-step" data-step="1" data-expand="flow-input">
                     <div class="step-number">1</div>
-                    <div class="step-icon">📡</div>
+                    <div class="step-icon"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4e1.svg" alt="satellite" /></div>
                     <h4>Data Input</h4>
                     <p>OHLCV from 7 timeframes</p>
                     <ul class="step-details">
@@ -725,7 +711,7 @@
 
                 <div class="flow-step" data-step="2" data-expand="flow-calc">
                     <div class="step-number">2</div>
-                    <div class="step-icon">🔧</div>
+                    <div class="step-icon"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f527.svg" alt="wrench" /></div>
                     <h4>Indicator Calculation</h4>
                     <p>15+ technical indicators</p>
                     <ul class="step-details">
@@ -742,7 +728,7 @@
 
                 <div class="flow-step" data-step="3" data-expand="flow-norm">
                     <div class="step-number">3</div>
-                    <div class="step-icon">🧮</div>
+                    <div class="step-icon"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f9ee.svg" alt="abacus" /></div>
                     <h4>Normalization</h4>
                     <p>Scale to [-1, 1]</p>
                     <ul class="step-details">
@@ -759,7 +745,7 @@
 
                 <div class="flow-step" data-step="4" data-expand="flow-aggregate">
                     <div class="step-number">4</div>
-                    <div class="step-icon">⚖️</div>
+                    <div class="step-icon"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/2696.svg" alt="scale" /></div>
                     <h4>Weighted Aggregation</h4>
                     <p>Category → TF → MTC</p>
                     <ul class="step-details">
@@ -776,7 +762,7 @@
 
                 <div class="flow-step" data-step="5" data-expand="flow-sentiment">
                     <div class="step-number">5</div>
-                    <div class="step-icon">📰</div>
+                    <div class="step-icon"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4f0.svg" alt="newspaper" /></div>
                     <h4>Sentiment Analysis</h4>
                     <p>NLP news processing</p>
                     <ul class="step-details">
@@ -793,7 +779,7 @@
 
                 <div class="flow-step final" data-step="6" data-expand="flow-output">
                     <div class="step-number">6</div>
-                    <div class="step-icon">✨</div>
+                    <div class="step-icon"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/2728.svg" alt="sparkles" /></div>
                     <h4>QSCI Output</h4>
                     <p>Final signal [-1, 1]</p>
                     <ul class="step-details">
@@ -966,7 +952,7 @@
 
             <div class="performance-dashboard">
                 <div class="perf-card primary" data-expand="winrate-detail">
-                    <div class="perf-icon">📊</div>
+                    <div class="perf-icon"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4ca.svg" alt="bar chart" /></div>
                     <div class="perf-metric">
                         <span class="metric-value" data-count="67">0</span>
                         <span class="metric-suffix">%</span>
@@ -976,7 +962,7 @@
                 </div>
 
                 <div class="perf-card" data-expand="sharpe-detail">
-                    <div class="perf-icon">📈</div>
+                    <div class="perf-icon"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4c8.svg" alt="chart" /></div>
                     <div class="perf-metric">
                         <span class="metric-value" data-count="1.85" data-decimals="2">0</span>
                     </div>
@@ -985,7 +971,7 @@
                 </div>
 
                 <div class="perf-card" data-expand="drawdown-detail">
-                    <div class="perf-icon">📉</div>
+                    <div class="perf-icon"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4c9.svg" alt="chart down" /></div>
                     <div class="perf-metric">
                         <span class="metric-prefix">-</span>
                         <span class="metric-value" data-count="12">0</span>
@@ -996,7 +982,7 @@
                 </div>
 
                 <div class="perf-card" data-expand="profit-detail">
-                    <div class="perf-icon">🎯</div>
+                    <div class="perf-icon"><img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f3af.svg" alt="target" /></div>
                     <div class="perf-metric">
                         <span class="metric-value" data-count="2.1" data-decimals="1">0</span>
                         <span class="metric-suffix">x</span>
@@ -1010,32 +996,32 @@
                 <h3 class="features-title">Backtester Features</h3>
                 <div class="features-grid">
                     <div class="feature-card">
-                        <span class="feature-icon">💰</span>
+                        <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4b0.svg" alt="money bag" class="feature-icon" />
                         <span class="feature-name">Transaction Costs</span>
                         <span class="feature-desc">Binance fees (0.1%) + slippage</span>
                     </div>
                     <div class="feature-card">
-                        <span class="feature-icon">🔄</span>
+                        <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f504.svg" alt="arrows" class="feature-icon" />
                         <span class="feature-name">Auto-Rolling</span>
                         <span class="feature-desc">Positions rolled at 7 DTE</span>
                     </div>
                     <div class="feature-card">
-                        <span class="feature-icon">📉</span>
+                        <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4c9.svg" alt="chart down" class="feature-icon" />
                         <span class="feature-name">Drawdown Tracking</span>
                         <span class="feature-desc">Real-time equity curve</span>
                     </div>
                     <div class="feature-card">
-                        <span class="feature-icon">⚡</span>
+                        <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/26a1.svg" alt="lightning" class="feature-icon" />
                         <span class="feature-name">Vectorized</span>
                         <span class="feature-desc">10x faster calculations</span>
                     </div>
                     <div class="feature-card">
-                        <span class="feature-icon">🎲</span>
+                        <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f3b2.svg" alt="dice" class="feature-icon" />
                         <span class="feature-name">Monte Carlo</span>
                         <span class="feature-desc">1000 simulation runs</span>
                     </div>
                     <div class="feature-card">
-                        <span class="feature-icon">📊</span>
+                        <img src="https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/1f4ca.svg" alt="bar chart" class="feature-icon" />
                         <span class="feature-name">Scenario Analysis</span>
                         <span class="feature-desc">Bull/Bear/Vol scenarios</span>
                     </div>

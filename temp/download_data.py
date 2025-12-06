@@ -22,11 +22,11 @@ def download_data():
     client = Client(api_key, api_secret)
 
     symbol = SYMBOL
-    start_date = BACKTEST_START_DATE
-    end_date = BACKTEST_END_DATE
+    start_date = "2024-12-01"  # Download from Dec 2024 onwards
+    end_date = datetime.now().strftime('%Y-%m-%d')  # Up to today
     timeframes = TIMEFRAMES
 
-    data_dir = "temp"
+    data_dir = "BTC_DATA"
 
     for tf in timeframes:
         print(f"Downloading {symbol} data for timeframe {tf}...")
@@ -44,26 +44,46 @@ def download_data():
 
         interval = interval_map[tf]
 
-        # Fetch historical klines
+        # Find existing file with old end date
+        old_filename = f"{symbol}_{tf}_20130101_to_20241201.csv"
+        old_filepath = os.path.join(data_dir, old_filename)
+        new_filepath = os.path.join(data_dir, f"{symbol}_{tf}_20130101_to_{end_date.replace('-', '')}.csv")
+
+        if os.path.exists(old_filepath):
+            existing_df = pd.read_csv(old_filepath)
+            existing_df['timestamp'] = pd.to_datetime(existing_df['timestamp'])
+            filepath = new_filepath  # save to new
+            print(f"Loaded existing {len(existing_df)} rows from {old_filepath}")
+        else:
+            existing_df = pd.DataFrame()
+            filepath = new_filepath
+            print(f"No existing file found for {tf}, starting fresh")
+
+        # Fetch new historical klines
         klines = client.get_historical_klines(symbol, interval, start_date, end_date)
 
         # Convert to DataFrame
         columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore']
-        df = pd.DataFrame(klines, columns=columns)
+        new_df = pd.DataFrame(klines, columns=columns)
+
+        if new_df.empty:
+            print(f"No new data for {tf}")
+            continue
 
         # Convert timestamp to datetime
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-        df['close_time'] = pd.to_datetime(df['close_time'], unit='ms')
+        new_df['timestamp'] = pd.to_datetime(new_df['timestamp'], unit='ms')
+        new_df['close_time'] = pd.to_datetime(new_df['close_time'], unit='ms')
 
         # Convert price columns to float
         price_cols = ['open', 'high', 'low', 'close', 'volume', 'quote_asset_volume', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume']
-        df[price_cols] = df[price_cols].astype(float)
+        new_df[price_cols] = new_df[price_cols].astype(float)
+
+        # Combine existing and new data, remove duplicates
+        combined_df = pd.concat([existing_df, new_df]).drop_duplicates(subset='timestamp').sort_values('timestamp').reset_index(drop=True)
 
         # Save to CSV
-        filename = f"{symbol}_{tf}_{start_date.replace('-', '')}_to_{end_date.replace('-', '')}.csv"
-        filepath = os.path.join(data_dir, filename)
-        df.to_csv(filepath, index=False)
-        print(f"Saved {len(df)} rows to {filepath}")
+        combined_df.to_csv(filepath, index=False)
+        print(f"Saved {len(combined_df)} rows to {filepath} (added {len(new_df)} new rows)")
 
         # Sleep to avoid rate limits
         time.sleep(1)

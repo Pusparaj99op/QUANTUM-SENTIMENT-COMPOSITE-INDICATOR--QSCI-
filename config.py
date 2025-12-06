@@ -33,9 +33,17 @@ USE_MAINNET_FOR_DATA = True  # Use mainnet for historical data (testnet has limi
 
 # Date Range
 BACKTEST_START_DATE = "2013-01-01"  # Format: YYYY-MM-DD
-BACKTEST_END_DATE = "2024-12-01"    # Format: YYYY-MM-DD
+BACKTEST_END_DATE = "2025-12-01"    # Format: YYYY-MM-DD
 SYMBOL = "BTCUSDT"
 OPTION_SYMBOL = "BTC"
+
+# Out-of-sample split configuration (fractions must sum to 1)
+OOS_CONFIG = {
+    "train_fraction": 0.60,
+    "validation_fraction": 0.20,
+    "test_fraction": 0.20,
+    "min_samples": 500,
+}
 
 # Timeframes
 TIMEFRAMES = ["4h", "2h", "1h", "30m", "15m", "5m", "1m"]  # For QSCI calculation
@@ -140,12 +148,14 @@ NEWS_SENTIMENT_CONFIG = {
 # OPTIONS TRADING CONFIGURATION
 # ============================================================================
 
-# Position Management
+# Position Management - More aggressive for profitability
 POSITION_CONFIG = {
     "account_balance": 10000,  # Demo account: $10,000
-    "risk_per_trade": 0.02,  # 2% risk per trade
-    "max_concurrent_positions": 3,  # Max 3 BTC call positions
+    "risk_per_trade": 0.025,  # 2.5% risk per trade (slightly more aggressive)
+    "max_concurrent_positions": 4,  # Allow 4 positions for diversification
     "max_position_size_pct": 0.05,  # Max 5% of account per trade
+    "scale_in_enabled": False,
+    "scale_in_threshold": 0.3,
 }
 
 # DTE (Days to Expiration) Multipliers
@@ -159,14 +169,16 @@ DTE_MULTIPLIERS = {
 
 # Entry Criteria
 ENTRY_CRITERIA = {
-    "min_qsci_signal": 0.20,  # Minimum QSCI for entry
+    "min_qsci_signal": 0.20,  # Lower threshold for more opportunities
     "min_liquidity_adjustment": 0.5,
-    "min_dte": 2,  # Minimum 2 days to expiration
-    "max_dte": 60,  # Maximum 60 days to expiration
-    "min_delta": 0.20,  # Minimum delta (avoid deep OTM)
-    "max_delta": 0.95,  # Maximum delta (avoid deep ITM)
-    "target_moneyness": 1.0,  # 1.0 = ATM (0.97-1.03 acceptable)
-    "max_spread_pct": 0.02,  # Max 2% spread
+    "min_dte": 5,  # Shorter DTE for faster theta capture on winners
+    "max_dte": 21,  # Max 3 weeks - less theta decay exposure
+    "min_delta": 0.30,  # Slightly more aggressive
+    "max_delta": 0.60,  # Balanced risk/reward
+    "target_moneyness": 1.03,  # 3% OTM for better leverage
+    "max_spread_pct": 0.02,  # Allow slightly wider spreads
+    "min_adx": 15,  # Lower ADX threshold for more trades
+    "require_trend_alignment": True,  # Keep trend alignment
 }
 
 # Greeks Configuration
@@ -179,14 +191,16 @@ GREEKS_CONFIG = {
     "max_theta_decay": -0.05,  # Alert if theta < -0.05
 }
 
-# Exit Rules
+# Exit Rules - Asymmetric R/R (let winners run, cut losers)
 EXIT_RULES = {
-    "tp1_target": 1.5,  # TP1 at Entry + (1.5 × ATR) - 50% exit
-    "tp2_target": 2.5,  # TP2 at Entry + (2.5 × ATR) - 30% exit
-    "tp3_target": 4.0,  # TP3 at Entry + (4.0 × ATR) - 20% exit
-    "sl_multiplier": 2.0,  # SL at Entry - (2 × ATR × |QSCI|)
-    "roll_dte_threshold": 7,  # Roll when DTE = 7
-    "mandatory_close_dte": 3,  # Close if not rolled by DTE = 3
+    "tp1_target": 1.5,  # First TP at 1.5x ATR
+    "tp2_target": 3.0,  # Let winners run to 3x ATR
+    "tp3_target": 5.0,  # Big winners to 5x ATR
+    "sl_multiplier": 1.2,  # Tighter SL - cut losers fast
+    "roll_dte_threshold": 8,  # Roll earlier
+    "mandatory_close_dte": 4,  # Close if not rolled
+    "trailing_activation": 0.8,  # Activate trail after 0.8 ATR profit
+    "trailing_distance": 0.35,  # Tighter trail at 35% of peak
 }
 
 # ============================================================================
@@ -253,12 +267,16 @@ ALERTS = {
 # ============================================================================
 
 STRATEGY_PARAMS = {
-    "only_strong_signals": False,  # Only trade QSCI > 0.70 (very conservative)
-    "use_sentiment_filter": True,  # Include sentiment in calculations
-    "use_multi_timeframe": True,  # Use all timeframes (vs. only primary)
-    "dynamic_position_sizing": True,  # Adjust size based on QSCI confidence
-    "use_kelly_criterion": False,  # Use Kelly fraction for sizing
-    "kelly_fraction": 0.25,  # Use 25% of Kelly (conservative)
+    "only_strong_signals": False,  # Allow moderate signals too
+    "use_sentiment_filter": False,  # Disable for cleaner signals
+    "use_multi_timeframe": True,  # Use all timeframes
+    "dynamic_position_sizing": True,  # Scale size with conviction
+    "use_kelly_criterion": False,
+    "kelly_fraction": 0.15,
+    "multitf_threshold": 0.12,  # Lower threshold
+    "sentiment_filter_threshold": 0.05,
+    "require_volume_confirmation": False,
+    "min_win_probability": 0.40,
 }
 
 # ============================================================================
