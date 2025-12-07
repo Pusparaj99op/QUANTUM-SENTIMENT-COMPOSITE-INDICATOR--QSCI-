@@ -13,6 +13,8 @@ import sys
 import time
 import signal
 import logging
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import json
@@ -693,6 +695,57 @@ class QSCILiveTrader:
         logger.info("Shutdown complete")
 
 
+# ============================================================
+# Health Check HTTP Server (for Web Service deployment)
+# ============================================================
+
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    """Simple HTTP handler for health checks"""
+
+    # Class-level reference to trader for status info
+    trader_instance = None
+
+    def log_message(self, format, *args):
+        # Suppress default HTTP logging to reduce noise
+        pass
+
+    def do_GET(self):
+        if self.path in ('/', '/health', '/healthz'):
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+
+            status = {
+                "status": "healthy",
+                "service": "QSCI Trading Bot",
+                "timestamp": datetime.utcnow().isoformat(),
+                "version": "1.0.0"
+            }
+
+            # Add trading info if available
+            if self.trader_instance:
+                status["balance"] = f"${self.trader_instance.account_balance:,.2f}"
+                status["running"] = self.trader_instance.running
+                status["open_positions"] = len([p for p in self.trader_instance.positions if p.status == "OPEN"])
+
+            self.wfile.write(json.dumps(status).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+
+def start_health_server(port: int = 8000, trader=None):
+    """Start HTTP health check server in background thread"""
+    HealthCheckHandler.trader_instance = trader
+
+    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    logger.info(f"✓ Health check server running on port {port}")
+    return server
+
+
 def main():
     """Entry point for Koyeb deployment"""
     logger.info("=" * 60)
@@ -716,6 +769,10 @@ def main():
 
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
+
+    # Start health check server for Web Service deployment
+    health_port = int(os.getenv("PORT", "8000"))
+    start_health_server(port=health_port, trader=trader)
 
     # Run the trader
     try:

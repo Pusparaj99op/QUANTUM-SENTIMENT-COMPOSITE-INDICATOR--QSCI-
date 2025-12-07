@@ -31,6 +31,7 @@ COPY --from=builder /usr/include/ta-lib /usr/include/ta-lib
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
+    curl \
     && rm -rf /var/lib/apt/lists/* \
     && ldconfig
 
@@ -55,9 +56,12 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV TZ=UTC
 
-# Health check (optional - for monitoring)
+# Expose port for health check HTTP server (Web Service deployment)
+EXPOSE 8000
+
+# Health check (uses the HTTP endpoint)
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-    CMD python -c "import sys; sys.exit(0)"
+    CMD curl -f http://localhost:8000/health || exit 1
 
 # Run the live trader
 CMD ["python", "qsci_live_trader.py"]
