@@ -2,7 +2,7 @@
 # Optimized for Koyeb deployment with TA-Lib support
 
 # Stage 1: Build TA-Lib
-FROM python:3.11-slim as builder
+FROM python:3.12-slim as builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -22,7 +22,7 @@ RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     rm -rf ta-lib ta-lib-0.4.0-src.tar.gz
 
 # Stage 2: Production image
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Copy TA-Lib from builder
 COPY --from=builder /usr/lib/libta_lib* /usr/lib/

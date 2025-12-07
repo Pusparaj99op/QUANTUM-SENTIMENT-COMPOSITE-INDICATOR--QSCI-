@@ -1,5 +1,5 @@
 # QSCI Trading Bot - Production Dependencies
-# Compatible with Python 3.8+
+# Requires Python 3.12+ (for pandas-ta compatibility)
 
 # === Core Data & Analysis ===
 pandas>=2.0.0,<3.0.0
