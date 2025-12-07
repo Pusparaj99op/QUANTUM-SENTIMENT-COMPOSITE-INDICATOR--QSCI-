@@ -152,7 +152,7 @@ NEWS_SENTIMENT_CONFIG = {
 POSITION_CONFIG = {
     "account_balance": 10000,  # Demo account: $10,000
     "risk_per_trade": 0.025,  # 2.5% risk per trade (slightly more aggressive)
-    "max_concurrent_positions": 4,  # Allow 4 positions for diversification
+    "max_concurrent_positions": 2,  # Reduced to 2 for testing phase
     "max_position_size_pct": 0.05,  # Max 5% of account per trade
     "scale_in_enabled": False,
     "scale_in_threshold": 0.3,
@@ -169,7 +169,7 @@ DTE_MULTIPLIERS = {
 
 # Entry Criteria
 ENTRY_CRITERIA = {
-    "min_qsci_signal": 0.05,  # Lower threshold for blended multi-tf signals
+    "min_qsci_signal": 0.15,  # Higher threshold for testing - stronger signals only
     "min_liquidity_adjustment": 0.5,
     "min_dte": 5,  # Shorter DTE for faster theta capture on winners
     "max_dte": 21,  # Max 3 weeks - less theta decay exposure

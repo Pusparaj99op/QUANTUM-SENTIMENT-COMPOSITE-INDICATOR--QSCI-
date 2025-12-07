@@ -28,10 +28,14 @@ FROM python:3.12-slim
 COPY --from=builder /usr/lib/libta_lib* /usr/lib/
 COPY --from=builder /usr/include/ta-lib /usr/include/ta-lib
 
-# Install runtime dependencies
+# Install runtime dependencies + build tools for pip packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     curl \
+    build-essential \
+    gcc \
+    g++ \
+    gfortran \
     && rm -rf /var/lib/apt/lists/* \
     && ldconfig
 
@@ -41,8 +45,10 @@ WORKDIR /app
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies, then remove build tools to keep image small
+RUN pip install --no-cache-dir -r requirements.txt \
+    && apt-get purge -y --auto-remove build-essential gcc g++ gfortran \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy application code
 COPY . .
