@@ -16,12 +16,12 @@ from datetime import datetime
 # ============================================================================
 
 # Binance Testnet API Keys (Demo - No Real Money)
-BINANCE_TESTNET_API_KEY = "  now i have to delete those apis brohhhh  "
-BINANCE_TESTNET_API_SECRET = "    "
+BINANCE_TESTNET_API_KEY = "0nEdzlzOmXUqu9dVt4TmTVXtlr9MGTiwKwOqj1QUktN9jmTOmsKam9YlGwyOgzXq"
+BINANCE_TESTNET_API_SECRET = "9trLkyBGwSFr404IH6NcjUQwNcXIuOLw8tvUcOJoWkOq0i89qBuHaLQ2jwF1KcUU"
 
 # Binance Mainnet API Keys (Optional - for live data only)
-BINANCE_MAINNET_API_KEY = "    "
-BINANCE_MAINNET_API_SECRET = "    "
+BINANCE_MAINNET_API_KEY = "0nEdzlzOmXUqu9dVt4TmTVXtlr9MGTiwKwOqj1QUktN9jmTOmsKam9YlGwyOgzXq"
+BINANCE_MAINNET_API_SECRET = "9trLkyBGwSFr404IH6NcjUQwNcXIuOLw8tvUcOJoWkOq0i89qBuHaLQ2jwF1KcUU"
 
 # API Configuration
 USE_TESTNET = False  # Set to True for demo, False for live data only
@@ -169,7 +169,7 @@ DTE_MULTIPLIERS = {
 
 # Entry Criteria
 ENTRY_CRITERIA = {
-    "min_qsci_signal": 0.20,  # Lower threshold for more opportunities
+    "min_qsci_signal": 0.05,  # Lower threshold for blended multi-tf signals
     "min_liquidity_adjustment": 0.5,
     "min_dte": 5,  # Shorter DTE for faster theta capture on winners
     "max_dte": 21,  # Max 3 weeks - less theta decay exposure
@@ -280,13 +280,75 @@ STRATEGY_PARAMS = {
 }
 
 # ============================================================================
-# DATABASE (Optional)
+# DATABASE - MongoDB Atlas Configuration
 # ============================================================================
 
 DATABASE_CONFIG = {
-    "use_database": False,  # Set True to use SQLite for data storage
-    "db_file": "qsci_backtest.db",
+    "use_database": True,  # Set True to use MongoDB for data storage
+    "db_file": "qsci_backtest.db",  # Legacy SQLite (for backtest mode)
     "auto_backup": True,
+}
+
+# MongoDB Configuration (for live trading)
+MONGODB_CONFIG = {
+    "uri": os.getenv("MONGODB_URI", ""),
+    "database": "qsci_trading",
+    "data_retention_days": 365,  # Keep OHLCV data for 1 year
+    "log_retention_days": 180,   # Keep logs/trades for 6 months
+    "max_storage_mb": 480,       # Leave buffer from 512MB free tier limit
+}
+
+# ============================================================================
+# TELEGRAM CONFIGURATION
+# ============================================================================
+
+TELEGRAM_CONFIG = {
+    "bot_token": os.getenv("TELEGRAM_BOT_TOKEN", ""),
+    "channel_id": os.getenv("TELEGRAM_CHANNEL_ID", ""),
+    "log_retention_days": 180,   # Clear messages older than 6 months
+    "notification_level": "ALL", # ALL, TRADES_ONLY, SUMMARY_ONLY
+    "send_signals": True,        # Send signals even without trades
+    "send_daily_summary": True,  # Send daily P&L summary
+    "summary_hour_utc": 0,       # Hour (UTC) to send daily summary
+}
+
+# ============================================================================
+# NEWS API CONFIGURATION
+# ============================================================================
+
+NEWS_CONFIG = {
+    # CryptoPanic API (recommended - free tier: 1000 requests/day)
+    "use_cryptopanic": True,
+    "cryptopanic_api_key": os.getenv("CRYPTOPANIC_API_KEY", ""),
+    "cryptopanic_url": "https://cryptopanic.com/api/v1/posts/",
+
+    # Fallback to simulated sentiment if news API fails
+    "fallback_to_dummy": True,
+
+    # News processing settings
+    "max_news_age_hours": 24,
+    "min_news_for_signal": 3,
+
+    # Source weights for sentiment calculation
+    "source_weights": {
+        "cryptopanic": 0.8,
+        "twitter": 0.3,
+        "reddit": 0.2,
+    }
+}
+
+# ============================================================================
+# LIVE TRADING CONFIGURATION
+# ============================================================================
+
+LIVE_TRADING_CONFIG = {
+    "mode": os.getenv("TRADING_MODE", "paper"),  # paper, backtest
+    "initial_balance": float(os.getenv("INITIAL_BALANCE", "10000")),
+    "check_interval_minutes": int(os.getenv("CHECK_INTERVAL_MINUTES", "5")),
+    "max_daily_loss_pct": float(os.getenv("MAX_DAILY_LOSS_PCT", "5")),
+    "max_drawdown_pct": float(os.getenv("MAX_DRAWDOWN_PCT", "20")),
+    "auto_restart_on_error": True,
+    "error_cooldown_minutes": 5,
 }
 
 # ============================================================================
