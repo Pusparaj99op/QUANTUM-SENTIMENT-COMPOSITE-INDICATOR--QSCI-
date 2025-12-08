@@ -376,6 +376,38 @@ Check the build logs for:
 - TA-Lib compilation errors (common - see Dockerfile for fix)
 - Memory limit exceeded during build
 
+### Issue: Instance Stops After 1 Hour ("Deep Sleep")
+
+**Symptoms:**
+- Logs show: `No traffic detected in the past hour. Transitioning to deep sleep.`
+- Instance status changes to "Stopped"
+- Bot stops trading after ~1 hour of running
+
+**Cause:**
+Koyeb's autoscaling feature puts instances to sleep when no **external HTTP traffic** is detected for 1 hour, even if the container is actively running internal processes.
+
+**Solution (Automatic):**
+The bot now **automatically prevents this** by pinging its own health endpoint every 30 minutes, generating the HTTP traffic Koyeb needs to keep the instance active.
+
+You'll see this in the logs periodically:
+```
+Health endpoint pinged to prevent autoscaling sleep
+```
+
+**Manual Alternative - Disable Autoscaling:**
+
+If you want to disable autoscaling entirely in Koyeb:
+
+1. Go to your service in Koyeb dashboard
+2. Navigate to **Settings** → **Scaling**
+3. Set **Autoscaling** to:
+   - Minimum instances: `1`
+   - Maximum instances: `1`
+4. **Important**: Enable **"Never sleep instances"** if available in your plan
+
+> [!NOTE]
+> The automatic self-ping solution is already implemented in the code, so no manual action is needed unless you prefer to configure Koyeb directly.
+
 ---
 
 ## 📁 Required Files in Repository

@@ -14,6 +14,7 @@ import time
 import signal
 import logging
 import threading
+import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -596,9 +597,25 @@ class QSCILiveTrader:
 
         logger.info("Starting main trading loop...")
 
+        # Track last health ping to prevent Koyeb autoscaling sleep
+        last_health_ping = time.time()
+        health_ping_interval = 30 * 60  # Ping every 30 minutes
+
         while self.running:
             try:
                 cycle_start = time.time()
+
+                # Ping health endpoint periodically to prevent Koyeb autoscaling sleep
+                current_time = time.time()
+                if current_time - last_health_ping >= health_ping_interval:
+                    try:
+                        health_port = int(os.getenv("PORT", "8000"))
+                        urllib.request.urlopen(f"http://localhost:{health_port}/health", timeout=5)
+                        logger.debug("Health endpoint pinged to prevent autoscaling sleep")
+                        last_health_ping = current_time
+                    except Exception as e:
+                        logger.debug(f"Health ping failed (non-critical): {e}")
+                        last_health_ping = current_time  # Reset timer anyway
 
                 # Check for daily summary
                 if datetime.utcnow().hour == 0 and datetime.utcnow().minute < 10:
