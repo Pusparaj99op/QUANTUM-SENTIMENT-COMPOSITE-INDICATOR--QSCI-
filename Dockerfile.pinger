@@ -1,0 +1,27 @@
+# Dockerfile for Keep-Alive Pinger Service
+# Ultra-lightweight service to ping the main trading bot
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install only requests
+RUN pip install --no-cache-dir requests
+
+# Copy pinger script
+COPY keep_alive_pinger.py .
+
+# Run as non-root user
+RUN useradd -m -u 1000 pinger && chown -R pinger:pinger /app
+USER pinger
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1
+
+# Default values (override in Koyeb)
+ENV TARGET_URL=https://your-qsci-bot.koyeb.app/health
+ENV PING_INTERVAL_SECONDS=300
+ENV PING_TIMEOUT_SECONDS=10
+
+# Run the pinger
+CMD ["python", "keep_alive_pinger.py"]
