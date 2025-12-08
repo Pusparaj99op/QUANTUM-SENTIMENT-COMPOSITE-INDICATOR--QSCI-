@@ -64,6 +64,7 @@ class MongoDBManager:
         "trades": "trades",
         "telegram": "telegram_logs",
         "state": "system_state",
+        "balance_history": "balance_history",
     }
 
     def __init__(self, config: Optional[MongoDBConfig] = None):
@@ -395,6 +396,49 @@ class MongoDBManager:
         if doc:
             return doc.get("value", default)
         return default
+
+    def save_balance_history(self, balance: float, trade_id: int = None,
+                              pnl: float = None) -> bool:
+        """
+        Save balance snapshot to history for tracking
+
+        Args:
+            balance: Current account balance
+            trade_id: Optional trade ID that caused the change
+            pnl: Optional P&L from the trade
+
+        Returns:
+            True if saved successfully
+        """
+        if not self.is_connected:
+            return False
+
+        collection = self.db[self.COLLECTIONS["balance_history"]]
+
+        doc = {
+            "balance": balance,
+            "timestamp": datetime.utcnow(),
+            "trade_id": trade_id,
+            "pnl": pnl
+        }
+
+        result = collection.insert_one(doc)
+        logger.debug(f"Saved balance history: ${balance:.2f}")
+        return result.acknowledged
+
+    def get_balance_history(self, limit: int = 100) -> List[Dict]:
+        """Get recent balance history"""
+        if not self.is_connected:
+            return []
+
+        collection = self.db[self.COLLECTIONS["balance_history"]]
+
+        cursor = collection.find(
+            {},
+            {"_id": 0}
+        ).sort("timestamp", DESCENDING).limit(limit)
+
+        return list(cursor)
 
     # ========== Telegram Log Methods ==========
 

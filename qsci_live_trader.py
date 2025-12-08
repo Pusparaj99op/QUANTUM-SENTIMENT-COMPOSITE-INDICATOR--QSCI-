@@ -120,6 +120,10 @@ class QSCILiveTrader:
         logger.info(f"Timeframes: {', '.join(TIMEFRAMES)}")
         logger.info("=" * 60)
 
+        # Connect Telegram to this trader for interactive commands
+        self.telegram.set_trader_reference(self)
+        self.telegram.start_polling()  # Start listening for commands
+
     def _load_state(self):
         """Load trading state from MongoDB"""
         if not self.mongodb.is_connected:
@@ -383,6 +387,11 @@ class QSCILiveTrader:
         Returns:
             Position object if executed, None otherwise
         """
+        # Check if trading is paused via Telegram
+        if self.telegram.is_trading_paused:
+            logger.info("Trading paused via Telegram - skipping entry")
+            return None
+
         # Check position limits
         max_positions = POSITION_CONFIG.get('max_concurrent_positions', 4)
         open_positions = [p for p in self.positions if p.status == "OPEN"]
@@ -548,6 +557,14 @@ class QSCILiveTrader:
         emoji = "✅" if position.pnl_after_fees > 0 else "❌"
         logger.info(f"{emoji} CLOSED #{position.id}: P&L=${position.pnl_after_fees:+.2f} ({reason})")
 
+        # Save balance history for tracking
+        if self.mongodb.is_connected:
+            self.mongodb.save_balance_history(
+                self.account_balance,
+                position.id,
+                position.pnl_after_fees
+            )
+
     def _send_daily_summary(self):
         """Send daily summary to Telegram"""
         today = datetime.utcnow().date()
@@ -693,6 +710,9 @@ class QSCILiveTrader:
     def _shutdown(self):
         """Graceful shutdown"""
         logger.info("Shutting down...")
+
+        # Stop Telegram polling
+        self.telegram.stop_polling()
 
         # Save final state
         self._save_state()

@@ -745,9 +745,9 @@ class QSCIBacktesterV3:
         self.daily_loss_limit_pct = 0.05  # 5% daily limit
         self.max_portfolio_drawdown_pct = 0.20  # 20% max DD before pause
         self.max_allowed_volatility = 0.06  # Allow trading in higher vol
-        self.trade_cooldown_hours = 4  # Shorter cooldown
+        self.trade_cooldown_hours = 2  # Reduced cooldown for more trades
         self.consecutive_losses = 0
-        self.consecutive_loss_limit = 4  # Allow 4 consecutive losses
+        self.consecutive_loss_limit = 5  # Allow 5 consecutive losses before pause
         self.last_trade_timestamp: Optional[datetime] = None
         self.max_vol_for_full_size = 0.025
         self.trailing_stop_factor = 0.5
@@ -1362,7 +1362,7 @@ class QSCIBacktesterV3:
                     )
 
             # ================== NEW ENTRIES ==================
-            if idx % 3 == 0:  # Check more frequently for opportunities
+            if idx % 1 == 0:  # Check EVERY candle for opportunities
                 # Get additional filters from row
                 adx_val = row.get('ADX', 0.0) if 'ADX' in row else 0.0
                 trend_dir = row.get('Trend_Signal', 0.0) if 'Trend_Signal' in row else 0.0
