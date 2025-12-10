@@ -159,29 +159,64 @@ class QSCILiveTrader:
         """
         Load data for ALL timeframes defined in config
         Returns dict of {timeframe: dataframe}
+
+        CRITICAL: Need at least 200 candles for indicator calculation
+        - ADX requires ~50+ candles to stabilize
+        - Ichimoku needs 52+ candles
+        - Bollinger Bands, MACD, etc. need 50-100 candles
         """
         import pandas as pd
         import numpy as np
 
         dataframes = {}
-        start_date = (datetime.utcnow() - timedelta(days=30)).strftime("%Y-%m-%d")
+
+        # Extended lookback periods per timeframe to ensure enough data
+        lookback_days = {
+            "4h": 120,  # ~720 candles
+            "2h": 90,   # ~1080 candles
+            "1h": 60,   # ~1440 candles
+            "30m": 45,  # ~2160 candles
+            "15m": 30,  # ~2880 candles
+            "5m": 20,   # ~5760 candles
+            "1m": 10    # ~14400 candles
+        }
+
         end_date = datetime.utcnow().strftime("%Y-%m-%d")
 
         for tf in TIMEFRAMES:
             try:
+                days = lookback_days.get(tf, 60)
+                start_date = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+
                 df = self.data_manager.fetch_klines("BTCUSDT", tf, start_date, end_date)
 
-                if len(df) > 50:
-                    # Calculate indicators for this timeframe
-                    df = VectorizedTechnicalAnalysis.calculate_all_indicators_vectorized(df)
-                    df = VectorizedTechnicalAnalysis.calculate_signals_vectorized(df)
-                    dataframes[tf] = df
-                    logger.debug(f"Loaded {tf}: {len(df)} candles, QSCI={df['QSCI'].iloc[-1]:.3f}")
+                if len(df) < 200:
+                    logger.warning(f"⚠️  {tf}: Only {len(df)} candles (need 200+) - skipping")
+                    continue
+
+                # Calculate indicators for this timeframe
+                df = VectorizedTechnicalAnalysis.calculate_all_indicators_vectorized(df)
+                df = VectorizedTechnicalAnalysis.calculate_signals_vectorized(df)
+
+                # Validate that QSCI was calculated (not NaN)
+                latest_qsci = df['QSCI'].iloc[-1]
+                latest_adx = df['ADX'].iloc[-1]
+
+                if np.isnan(latest_qsci) or np.isnan(latest_adx):
+                    logger.warning(f"⚠️  {tf}: Indicators are NaN (QSCI={latest_qsci}, ADX={latest_adx}) - skipping")
+                    continue
+
+                dataframes[tf] = df
+                logger.info(f"✓ {tf}: {len(df)} candles, QSCI={latest_qsci:.3f}, ADX={latest_adx:.1f}")
 
             except Exception as e:
                 logger.warning(f"Failed to load {tf} data: {e}")
 
-        logger.info(f"📊 Loaded {len(dataframes)}/{len(TIMEFRAMES)} timeframes")
+        logger.info(f"📊 Loaded {len(dataframes)}/{len(TIMEFRAMES)} valid timeframes")
+
+        if len(dataframes) == 0:
+            logger.error("❌ CRITICAL: No valid timeframes loaded - cannot trade!")
+
         return dataframes
 
     def _blend_multi_timeframe_signal(self, dataframes: Dict[str, any]) -> float:
@@ -325,7 +360,8 @@ class QSCILiveTrader:
             primary_df: Primary timeframe dataframe (for price, ADX, ATR)
             blended_qsci: Pre-calculated blended QSCI from all timeframes
         """
-        if primary_df is None or len(primary_df) < 50:
+        if primary_df is None or len(primary_df) < 200:
+            logger.warning(f"Insufficient data: {len(primary_df) if primary_df is not None else 0} candles (need 200+)")
             return None
 
         # Get latest values from primary timeframe
@@ -334,16 +370,24 @@ class QSCILiveTrader:
         close = latest.get('Close', 0)
         atr = latest.get('ATR', 0)
 
+        # Validate indicators are not NaN
+        import numpy as np
+        if np.isnan(adx) or np.isnan(close) or np.isnan(atr) or np.isnan(blended_qsci):
+            logger.warning(f"NaN values detected: ADX={adx}, Close={close}, ATR={atr}, QSCI={blended_qsci}")
+            return None
+
         # Check entry criteria using BLENDED QSCI
-        min_signal = ENTRY_CRITERIA.get('min_qsci_signal', 0.20)
+        min_signal = ENTRY_CRITERIA.get('min_qsci_signal', 0.15)
         min_adx = ENTRY_CRITERIA.get('min_adx', 15)
 
+        logger.debug(f"Signal check: QSCI={blended_qsci:.3f} (min={min_signal}), ADX={adx:.1f} (min={min_adx})")
+
         if abs(blended_qsci) < min_signal:
-            logger.debug(f"Multi-TF signal too weak: {blended_qsci:.3f} < {min_signal}")
+            logger.info(f"⚠️  Multi-TF signal too weak: {blended_qsci:.3f} < {min_signal}")
             return None
 
         if adx < min_adx:
-            logger.debug(f"ADX too low: {adx:.1f} < {min_adx}")
+            logger.info(f"⚠️  ADX too low: {adx:.1f} < {min_adx}")
             return None
 
         # Determine direction based on BLENDED signal
@@ -651,16 +695,19 @@ class QSCILiveTrader:
 
                         # Calculate blended multi-timeframe QSCI
                         blended_qsci = self._blend_multi_timeframe_signal(dataframes)
-                        logger.info(f"📊 Multi-TF QSCI: {blended_qsci:.3f} (blend of {len(dataframes)} timeframes)")
 
-                        # Log individual timeframe signals
+                        # Log individual timeframe signals for debugging
                         tf_signals = []
                         for tf in TIMEFRAMES:
                             if tf in dataframes and 'QSCI' in dataframes[tf].columns:
                                 qsci = dataframes[tf]['QSCI'].iloc[-1]
-                                tf_signals.append(f"{tf}={qsci:.2f}")
-                        if tf_signals:
-                            logger.debug(f"   TF Signals: {', '.join(tf_signals)}")
+                                tf_signals.append(f"{tf}={qsci:.3f}")
+
+                        if len(dataframes) > 0:
+                            logger.info(f"📊 Multi-TF QSCI: {blended_qsci:.3f} (from {len(dataframes)} TFs)")
+                            logger.info(f"   Individual: {', '.join(tf_signals) if tf_signals else 'none'}")
+                        else:
+                            logger.warning(f"⚠️  No valid timeframe data - cannot generate signals")
 
                         # Save OHLCV to MongoDB (all timeframes)
                         if self.mongodb.is_connected:
