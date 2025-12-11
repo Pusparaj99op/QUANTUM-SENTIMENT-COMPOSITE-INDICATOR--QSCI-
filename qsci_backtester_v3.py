@@ -408,10 +408,56 @@ class OptionMarketModel:
     def _norm_cdf(x: float) -> float:
         return 0.5 * (1.0 + erf(x / sqrt(2.0)))
 
+    @staticmethod
+    def _norm_pdf(x: float) -> float:
+        return (1.0 / sqrt(2.0 * np.pi)) * exp(-0.5 * x * x)
+
     def annualize_vol(self, atr_pct: float) -> float:
         atr_pct = max(atr_pct, 0.0005)
         implied = atr_pct * sqrt(365)
         return min(max(implied, self.min_iv), self.max_iv)
+
+    def calculate_greeks(self, spot: float, strike: float, dte: float, iv: float,
+                         option_type: str = "CALL") -> Dict[str, float]:
+        """Calculate Delta, Gamma, Vega, Theta"""
+        strike = max(strike, 1e-6)
+        spot = max(spot, 1e-6)
+        time_fraction = max(dte, 0.25) / 365
+        sigma = min(max(iv, self.min_iv), self.max_iv)
+        vol_sqrt_t = sigma * sqrt(time_fraction)
+
+        if vol_sqrt_t == 0:
+            return {'delta': 0.0, 'gamma': 0.0, 'vega': 0.0, 'theta': 0.0}
+
+        d1 = (log(spot / strike) + (self.risk_free_rate + 0.5 * sigma ** 2) * time_fraction) / vol_sqrt_t
+        d2 = d1 - vol_sqrt_t
+
+        nd1 = self._norm_cdf(d1)
+        nd2 = self._norm_cdf(d2)
+        n_prime_d1 = self._norm_pdf(d1)
+        discount = exp(-self.risk_free_rate * time_fraction)
+
+        # Gamma (same for Call and Put)
+        gamma = n_prime_d1 / (spot * sigma * sqrt(time_fraction))
+
+        # Vega (same for Call and Put) - usually expressed for 1% change in vol
+        vega = spot * n_prime_d1 * sqrt(time_fraction) / 100
+
+        if option_type == "CALL":
+            delta = nd1
+            theta = (- (spot * n_prime_d1 * sigma) / (2 * sqrt(time_fraction))
+                     - self.risk_free_rate * strike * discount * nd2) / 365
+        else:  # PUT
+            delta = nd1 - 1
+            theta = (- (spot * n_prime_d1 * sigma) / (2 * sqrt(time_fraction))
+                     + self.risk_free_rate * strike * discount * (1 - nd2)) / 365
+
+        return {
+            'delta': delta,
+            'gamma': gamma,
+            'vega': vega,
+            'theta': theta
+        }
 
     def price_option(self, spot: float, strike: float, dte: float, iv: float,
                       option_type: str = "CALL") -> Tuple[float, float]:
@@ -448,17 +494,23 @@ class OptionMarketModel:
     def estimate_fair_value(self, spot: float, strike: float, dte: float,
                             atr_pct: float, option_type: str = "CALL") -> Dict[str, float]:
         iv = self.annualize_vol(atr_pct)
-        mid, delta = self.price_option(spot, strike, dte, iv, option_type)
+        mid, _ = self.price_option(spot, strike, dte, iv, option_type)
+        greeks = self.calculate_greeks(spot, strike, dte, iv, option_type)
+
         spread_pct = min(self.base_spread + (self.vol_spread_mult * atr_pct) + self.liquidity_spread, 0.02)
         bid = max(mid * (1 - spread_pct / 2), 0.0)
         ask = mid * (1 + spread_pct / 2)
+
         return {
             'iv': iv,
             'mid': mid,
             'bid': bid,
             'ask': ask,
             'spread_pct': spread_pct,
-            'delta': delta,
+            'delta': greeks['delta'],
+            'gamma': greeks['gamma'],
+            'vega': greeks['vega'],
+            'theta': greeks['theta'],
             'option_type': option_type
         }
 
@@ -477,6 +529,9 @@ class Position:
     delta: float
     qsci: float
     implied_vol: float
+    gamma: float = 0.0
+    vega: float = 0.0
+    theta: float = 0.0
     option_type: str = "CALL"  # CALL or PUT
     entry_time: datetime = field(default_factory=datetime.now)
     current_price: float = 0.0
@@ -1066,12 +1121,64 @@ class QSCIBacktesterV3:
         logger.info(f"🔄 Roll executed: Total cost ${total_roll_cost:.2f}")
         return True
 
+    def _compute_iv_rank(self, df: pd.DataFrame, lookback_days: int = 90) -> float:
+        """Compute IV Rank from historical ATR data
+        
+        IV Rank = (current IV - min IV) / (max IV - min IV)
+        Returns value between 0 (lowest IV) and 1 (highest IV)
+        """
+        if 'ATR' not in df.columns or 'Close' not in df.columns:
+            return 0.5  # Default to neutral if data missing
+        
+        # Calculate lookback window in rows (approximate based on timeframe)
+        lookback_rows = min(lookback_days * 24, len(df) - 1)  # Assume hourly for 1h timeframe
+        if lookback_rows < 10:
+            return 0.5
+        
+        # Get recent data
+        recent_df = df.iloc[-lookback_rows:].copy()
+        
+        # Compute IV from ATR percentage
+        recent_df['ATR_PCT'] = recent_df['ATR'] / recent_df['Close']
+        iv_series = recent_df['ATR_PCT'].apply(lambda x: self.option_model.annualize_vol(x))
+        
+        if len(iv_series) < 2:
+            return 0.5
+        
+        current_iv = iv_series.iloc[-1]
+        min_iv = iv_series.min()
+        max_iv = iv_series.max()
+        
+        # Avoid division by zero
+        if max_iv - min_iv < 0.01:
+            return 0.5
+        
+        iv_rank = (current_iv - min_iv) / (max_iv - min_iv)
+        return np.clip(iv_rank, 0.0, 1.0)
+
     def calculate_position_size(self, qsci: float, delta: float, option_price: float,
                                 spot_price: float, volatility_pct: float) -> int:
-        """Calculate position size with conviction-based scaling"""
+        """Calculate position size with conviction-based scaling
+        
+        Uses risk_per_trade to bound max loss (premium paid on long options),
+        then clips to max_position_size_pct.
+        """
 
         risk_pct = POSITION_CONFIG['risk_per_trade']
+        max_size_pct = POSITION_CONFIG['max_position_size_pct']
+        
+        option_price = max(option_price, spot_price * 0.001)  # Minimum floor
+
+        # Use risk_per_trade as intended: max premium at risk
         risk_amount = self.account_balance * risk_pct
+        qty_by_risk = int(max(1, risk_amount / option_price))
+        
+        # Max trade value cap
+        max_trade_val = self.account_balance * max_size_pct
+        qty_by_max_val = int(max(1, max_trade_val / option_price))
+        
+        # Base quantity from risk limits
+        base_quantity = min(qty_by_risk, qty_by_max_val)
 
         # Conviction multiplier: stronger signals get bigger size
         conviction = abs(qsci)
@@ -1092,13 +1199,13 @@ class QSCIBacktesterV3:
         dd_pct = dd_stats.get('current_drawdown_pct', 0) / 100
         dd_penalty = max(0.4, 1.0 - dd_pct * 1.5)
 
-        risk_amount *= signal_mult * delta_mult * vol_penalty * dd_penalty
+        # Apply scaling factors
+        adjusted_quantity = base_quantity * signal_mult * delta_mult * vol_penalty * dd_penalty
+        
+        # Ensure we don't exceed max size after scaling
+        final_quantity = int(min(adjusted_quantity, qty_by_max_val))
 
-        option_price = option_price if option_price > 0 else spot_price * 0.02
-        raw_size = risk_amount / option_price
-        max_size = self.account_balance * POSITION_CONFIG['max_position_size_pct'] / option_price
-
-        return max(1, min(int(raw_size), int(max_size)))
+        return max(1, final_quantity)
 
     def simulate_trade(
         self,

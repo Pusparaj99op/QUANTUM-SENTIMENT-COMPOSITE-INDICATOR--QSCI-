@@ -1,9 +1,9 @@
 """
-QSCI BTC Options Backtester v2.0
+QSCI BTC Options Backtester v3.0
 Quantum-Sentiment Composite Indicator for Bitcoin Call Options Trading
 Multi-Timeframe Analysis with Sentiment Integration
 Author: Quantitative Trading System
-Date: December 2, 2025
+Date: December 11, 2025
 
 Configuration File for API Keys and Settings
 """
@@ -169,7 +169,7 @@ DTE_MULTIPLIERS = {
 
 # Entry Criteria
 ENTRY_CRITERIA = {
-    "min_qsci_signal": 0.05,  # AGGRESSIVE: Very sensitive to opportunities
+    "min_qsci_signal": 0.12,  # Increased from 0.05 for higher quality trades
     "min_liquidity_adjustment": 0.5,
     "min_dte": 5,  # Shorter DTE for faster theta capture on winners
     "max_dte": 21,  # Max 3 weeks - less theta decay exposure
@@ -177,9 +177,10 @@ ENTRY_CRITERIA = {
     "max_delta": 0.60,  # Balanced risk/reward
     "target_moneyness": 1.03,  # 3% OTM for better leverage
     "max_spread_pct": 0.02,  # Allow slightly wider spreads
-    "min_adx": 10,  # Low ADX threshold for maximum trades
+    "min_adx": 20,  # Increased from 10 for stronger trends
     "require_trend_alignment": True,  # Keep trend alignment
-    
+    "max_iv_rank": 0.6,  # NEW: Avoid buying options when IV > 60th percentile
+
     # Alternative: Use strongest timeframe instead of blended (set to True for more trades)
     "use_strongest_tf_signal": False,  # If True, uses strongest single TF signal instead of blended
 }# Greeks Configuration
