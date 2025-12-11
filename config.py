@@ -169,7 +169,7 @@ DTE_MULTIPLIERS = {
 
 # Entry Criteria
 ENTRY_CRITERIA = {
-    "min_qsci_signal": 0.08,  # FURTHER LOWERED: More sensitive to opportunities (was 0.10)
+    "min_qsci_signal": 0.05,  # AGGRESSIVE: Very sensitive to opportunities
     "min_liquidity_adjustment": 0.5,
     "min_dte": 5,  # Shorter DTE for faster theta capture on winners
     "max_dte": 21,  # Max 3 weeks - less theta decay exposure
@@ -177,14 +177,12 @@ ENTRY_CRITERIA = {
     "max_delta": 0.60,  # Balanced risk/reward
     "target_moneyness": 1.03,  # 3% OTM for better leverage
     "max_spread_pct": 0.02,  # Allow slightly wider spreads
-    "min_adx": 12,  # Lower ADX threshold for more trades
+    "min_adx": 10,  # Low ADX threshold for maximum trades
     "require_trend_alignment": True,  # Keep trend alignment
-
+    
     # Alternative: Use strongest timeframe instead of blended (set to True for more trades)
     "use_strongest_tf_signal": False,  # If True, uses strongest single TF signal instead of blended
-}
-
-# Greeks Configuration
+}# Greeks Configuration
 GREEKS_CONFIG = {
     "delta_weight": 0.40,
     "gamma_weight": 0.25,
