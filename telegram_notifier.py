@@ -217,7 +217,7 @@ class TelegramNotifier:
         self.command_handlers: Dict[str, Callable] = {}
         self.trader_reference = None  # Reference to live trader for status
         self.is_trading_paused = False
-        
+
         # User settings per chat
         self.user_settings: Dict[str, Dict] = {}  # chat_id -> settings
 
@@ -325,7 +325,7 @@ class TelegramNotifier:
             "parse_mode": parse_mode,
             "disable_notification": disable_notification
         }
-        
+
         if reply_markup:
             data["reply_markup"] = reply_markup
 
@@ -490,20 +490,20 @@ Batched {count} {message_type} notifications
 
             for update in data.get("result", []):
                 self.last_update_id = update["update_id"]
-                
+
                 # Handle callback queries (button presses)
                 if "callback_query" in update:
                     callback = update["callback_query"]
                     chat_id = str(callback["message"]["chat"]["id"])
                     callback_data = callback["data"]
                     callback_id = callback["id"]
-                    
+
                     # Answer the callback to remove loading state
                     self._make_request("answerCallbackQuery", {"callback_query_id": callback_id})
-                    
+
                     # Handle the button press
                     self._handle_callback(callback_data, chat_id)
-                
+
                 # Handle text messages
                 elif "message" in update:
                     message = update["message"]
@@ -528,11 +528,11 @@ Batched {count} {message_type} notifications
 
         except Exception as e:
             logger.debug(f"Update fetch failed: {e}")
-    
+
     def _handle_callback(self, callback_data: str, chat_id: str):
         """Handle inline button callback"""
         logger.info(f"🔘 Button pressed: {callback_data} from {chat_id}")
-        
+
         # Map callback data to commands
         if callback_data == "status":
             self._cmd_status(chat_id)
@@ -550,55 +550,55 @@ Batched {count} {message_type} notifications
             self._cmd_help(chat_id)
         elif callback_data.startswith("set_"):
             self._handle_setting_callback(callback_data, chat_id)
-    
+
     def _handle_setting_callback(self, callback_data: str, chat_id: str):
         """Handle settings adjustment callbacks"""
         from config import POSITION_CONFIG, ENTRY_CRITERIA
-        
+
         if callback_data == "set_pos_up":
             old = POSITION_CONFIG['max_concurrent_positions']
             new = min(old + 1, 10)
             POSITION_CONFIG['max_concurrent_positions'] = new
             msg = f"✅ Max positions: {old} → {new}"
-        
+
         elif callback_data == "set_pos_down":
             old = POSITION_CONFIG['max_concurrent_positions']
             new = max(old - 1, 1)
             POSITION_CONFIG['max_concurrent_positions'] = new
             msg = f"✅ Max positions: {old} → {new}"
-        
+
         elif callback_data == "set_risk_up":
             old = POSITION_CONFIG['risk_per_trade'] * 100
             new = min(old + 0.5, 10.0)
             POSITION_CONFIG['risk_per_trade'] = new / 100
             msg = f"✅ Risk per trade: {old:.1f}% → {new:.1f}%"
-        
+
         elif callback_data == "set_risk_down":
             old = POSITION_CONFIG['risk_per_trade'] * 100
             new = max(old - 0.5, 0.5)
             POSITION_CONFIG['risk_per_trade'] = new / 100
             msg = f"✅ Risk per trade: {old:.1f}% → {new:.1f}%"
-        
+
         elif callback_data == "set_entry_strict":
             ENTRY_CRITERIA['min_qsci_signal'] = min(ENTRY_CRITERIA.get('min_qsci_signal', 0.12) + 0.02, 0.30)
             ENTRY_CRITERIA['min_adx'] = min(ENTRY_CRITERIA.get('min_adx', 20) + 2, 30)
             msg = f"✅ Entry criteria made stricter\nQSCI: {ENTRY_CRITERIA['min_qsci_signal']:.2f}, ADX: {ENTRY_CRITERIA['min_adx']}"
-        
+
         elif callback_data == "set_entry_relaxed":
             ENTRY_CRITERIA['min_qsci_signal'] = max(ENTRY_CRITERIA.get('min_qsci_signal', 0.12) - 0.02, 0.05)
             ENTRY_CRITERIA['min_adx'] = max(ENTRY_CRITERIA.get('min_adx', 20) - 2, 10)
             msg = f"✅ Entry criteria relaxed\nQSCI: {ENTRY_CRITERIA['min_qsci_signal']:.2f}, ADX: {ENTRY_CRITERIA['min_adx']}"
-        
+
         elif callback_data == "set_reset":
             POSITION_CONFIG['max_concurrent_positions'] = 2
             POSITION_CONFIG['risk_per_trade'] = 0.025
             ENTRY_CRITERIA['min_qsci_signal'] = 0.12
             ENTRY_CRITERIA['min_adx'] = 20
             msg = "✅ Settings reset to defaults"
-        
+
         else:
             msg = "❌ Unknown setting"
-        
+
         self.send_message(msg, chat_id=chat_id)
         # Show updated settings
         time.sleep(0.5)
@@ -636,6 +636,15 @@ Batched {count} {message_type} notifications
             self._cmd_settrades(chat_id, args[0])
         elif command == "/setrisk" and args:
             self._cmd_setrisk(chat_id, args[0])
+        # New parameter control commands
+        elif command == "/params":
+            self._cmd_params(chat_id, args)
+        elif command == "/set":
+            self._cmd_set(chat_id, args)
+        elif command == "/preset":
+            self._cmd_preset(chat_id, args)
+        elif command == "/history":
+            self._cmd_history(chat_id, args)
         else:
             self.send_message(
                 f"❓ Unknown command: <code>{command}</code>\n\nUse /help for available commands.",
@@ -660,7 +669,7 @@ Batched {count} {message_type} notifications
 🕐 <b>Uptime:</b> Running
 ━━━━━━━━━━━━━━━━━━━━━━━━━
             """.strip()
-            
+
             # Create inline keyboard with quick action buttons
             keyboard = {
                 "inline_keyboard": [
@@ -783,30 +792,30 @@ Total closed: {len(t.trades_log)}
         """Handle /stats command - show comprehensive statistics"""
         if self.trader_reference:
             t = self.trader_reference
-            
+
             # Calculate statistics
             total_trades = len(t.trades_log)
             wins = sum(1 for trade in t.trades_log if trade.get('pnl_after_fees', 0) > 0)
             losses = total_trades - wins
             win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
-            
+
             avg_win = sum(trade.get('pnl_after_fees', 0) for trade in t.trades_log if trade.get('pnl_after_fees', 0) > 0) / wins if wins > 0 else 0
             avg_loss = sum(trade.get('pnl_after_fees', 0) for trade in t.trades_log if trade.get('pnl_after_fees', 0) < 0) / losses if losses > 0 else 0
-            
+
             profit_factor = abs(avg_win * wins / (avg_loss * losses)) if losses > 0 and avg_loss != 0 else 0
-            
+
             # Get max drawdown
             max_dd = getattr(t, 'max_drawdown_pct', 0)
-            
+
             # Current positions
             open_positions = [p for p in t.positions if p.status == "OPEN"]
             open_pos_pnl = sum(p.pnl for p in open_positions)
-            
+
             # Return calculations
             initial = t.initial_balance
             current = t.account_balance
             total_return = ((current - initial) / initial * 100) if initial > 0 else 0
-            
+
             text = f"""
 📊 <b>Trading Statistics Dashboard</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -841,7 +850,7 @@ Total closed: {len(t.trades_log)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 🕐 Updated: {datetime.now().strftime('%H:%M:%S')}
             """.strip()
-            
+
             keyboard = {
                 "inline_keyboard": [
                     [{"text": "🔄 Refresh", "callback_data": "stats"},
@@ -859,14 +868,14 @@ Total closed: {len(t.trades_log)}
     def _cmd_settings(self, chat_id: str):
         """Handle /settings command - show and adjust trading parameters"""
         from config import POSITION_CONFIG, ENTRY_CRITERIA
-        
+
         # Get current settings
         max_positions = POSITION_CONFIG.get('max_concurrent_positions', 2)
         risk_per_trade = POSITION_CONFIG.get('risk_per_trade', 0.025) * 100
         min_qsci = ENTRY_CRITERIA.get('min_qsci_signal', 0.12)
         min_adx = ENTRY_CRITERIA.get('min_adx', 20)
         max_iv_rank = ENTRY_CRITERIA.get('max_iv_rank', 0.6) * 100
-        
+
         text = f"""
 ⚙️ <b>Trading Settings</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -883,7 +892,7 @@ Total closed: {len(t.trades_log)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 Click below to adjust settings
         """.strip()
-        
+
         keyboard = {
             "inline_keyboard": [
                 [{"text": "➕ Increase Positions", "callback_data": "set_pos_up"},
@@ -896,7 +905,7 @@ Total closed: {len(t.trades_log)}
                  {"text": "🏠 Home", "callback_data": "status"}]
             ]
         }
-        
+
         self.send_message(text, chat_id=chat_id, reply_markup=keyboard)
 
     def _cmd_help(self, chat_id: str):
@@ -917,7 +926,14 @@ Total closed: {len(t.trades_log)}
 /stop - Pause trading
 /start - Resume trading
 
-🔧 <b>Advanced</b>
+🎛️ <b>Parameter Control</b>
+/params - Show all parameters
+/params &lt;category&gt; - Show category
+/set &lt;param&gt; &lt;value&gt; - Set parameter
+/preset &lt;name&gt; - Apply preset
+/history - Change history
+
+🔧 <b>Quick Set</b>
 /setbalance &lt;amt&gt; - Set balance
 /settrades &lt;num&gt; - Set max positions
 /setrisk &lt;pct&gt; - Set risk per trade
@@ -925,7 +941,7 @@ Total closed: {len(t.trades_log)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 Use interactive buttons for easier navigation!
         """.strip()
-        
+
         keyboard = {
             "inline_keyboard": [
                 [{"text": "📊 Status", "callback_data": "status"},
@@ -933,7 +949,7 @@ Total closed: {len(t.trades_log)}
                 [{"text": "⚙️ Settings", "callback_data": "settings"}]
             ]
         }
-        
+
         self.send_message(text, chat_id=chat_id, reply_markup=keyboard)
 
     def _cmd_setbalance(self, chat_id: str, amount_str: str):
@@ -959,7 +975,7 @@ Total closed: {len(t.trades_log)}
                 f"❌ Invalid amount: <code>{amount_str}</code>\n\nUse: /setbalance 10000",
                 chat_id=chat_id
             )
-    
+
     def _cmd_settrades(self, chat_id: str, num_str: str):
         """Handle /settrades command - set max concurrent positions"""
         try:
@@ -970,11 +986,11 @@ Total closed: {len(t.trades_log)}
                     chat_id=chat_id
                 )
                 return
-            
+
             from config import POSITION_CONFIG
             old_max = POSITION_CONFIG['max_concurrent_positions']
             POSITION_CONFIG['max_concurrent_positions'] = num
-            
+
             self.send_message(
                 f"📊 <b>Max Positions Updated</b>\n\n"
                 f"Old: {old_max} positions\n"
@@ -988,7 +1004,7 @@ Total closed: {len(t.trades_log)}
                 f"❌ Invalid number: <code>{num_str}</code>\n\nUse: /settrades 3",
                 chat_id=chat_id
             )
-    
+
     def _cmd_setrisk(self, chat_id: str, pct_str: str):
         """Handle /setrisk command - set risk per trade percentage"""
         try:
@@ -999,13 +1015,13 @@ Total closed: {len(t.trades_log)}
                     chat_id=chat_id
                 )
                 return
-            
+
             from config import POSITION_CONFIG
             old_risk = POSITION_CONFIG['risk_per_trade'] * 100
             POSITION_CONFIG['risk_per_trade'] = pct / 100
-            
+
             risk_level = "🟢 Conservative" if pct < 2 else "🟡 Moderate" if pct < 3.5 else "🔴 Aggressive"
-            
+
             self.send_message(
                 f"⚠️ <b>Risk Per Trade Updated</b>\n\n"
                 f"Old: {old_risk:.1f}%\n"
@@ -1020,6 +1036,228 @@ Total closed: {len(t.trades_log)}
                 f"❌ Invalid percentage: <code>{pct_str}</code>\n\nUse: /setrisk 2.5",
                 chat_id=chat_id
             )
+
+    def _cmd_params(self, chat_id: str, args: list = None):
+        """Handle /params command - show all modifiable parameters"""
+        try:
+            from parameter_registry import ParameterRegistry
+            registry = ParameterRegistry()
+
+            if args and len(args) > 0:
+                # Show specific category
+                category = args[0].lower()
+                params = registry.get_by_category(category)
+                if not params:
+                    self.send_message(
+                        f"❌ Unknown category: <code>{category}</code>\n\n"
+                        f"Available: {', '.join(registry.get_categories())}",
+                        chat_id=chat_id
+                    )
+                    return
+
+                text = f"⚙️ <b>Parameters: {category.upper()}</b>\n"
+                text += "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                for name, spec in params.items():
+                    text += f"<code>{name}</code>: {spec.value}\n"
+                text += f"\n💡 Use /set <param> <value> to modify"
+            else:
+                # Show categories
+                categories = registry.get_categories()
+                text = f"""
+⚙️ <b>Parameter Categories</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━
+{chr(10).join(f"• {cat}: {len(registry.get_by_category(cat))} params" for cat in sorted(categories))}
+
+💡 <b>Commands:</b>
+• /params <category> - Show category
+• /set <param> <value> - Set parameter
+• /preset <name> - Apply preset
+
+📋 <b>Presets:</b>
+{chr(10).join(f"• {name}: {desc}" for name, desc in registry.get_presets().items())}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+                """.strip()
+
+            self.send_message(text, chat_id=chat_id)
+        except ImportError:
+            self.send_message(
+                "⚠️ Parameter registry not available.\n"
+                "Use /settings for basic parameter control.",
+                chat_id=chat_id
+            )
+
+    def _cmd_set(self, chat_id: str, args: list):
+        """Handle /set command - set a specific parameter"""
+        if not args or len(args) < 2:
+            self.send_message(
+                "📝 <b>Set Parameter</b>\n\n"
+                "Usage: <code>/set <param> <value></code>\n\n"
+                "Examples:\n"
+                "• <code>/set min_qsci_signal 0.15</code>\n"
+                "• <code>/set risk_per_trade 0.03</code>\n"
+                "• <code>/set max_iv_rank 0.5</code>\n"
+                "• <code>/set use_sentiment_filter true</code>\n\n"
+                "Use /params to see all parameters.",
+                chat_id=chat_id
+            )
+            return
+
+        try:
+            from parameter_registry import ParameterRegistry
+            registry = ParameterRegistry()
+
+            param_name = args[0]
+            value_str = args[1]
+
+            # Check if parameter exists
+            spec = registry.get_spec(param_name)
+            if not spec:
+                # Try to find similar parameters
+                similar = [n for n in registry._params.keys() if param_name.lower() in n.lower()]
+                msg = f"❌ Unknown parameter: <code>{param_name}</code>"
+                if similar:
+                    msg += f"\n\nDid you mean:\n" + "\n".join(f"• <code>{s}</code>" for s in similar[:5])
+                self.send_message(msg, chat_id=chat_id)
+                return
+
+            # Check if editable via Telegram
+            if not spec.telegram_editable:
+                self.send_message(
+                    f"🔒 Parameter <code>{param_name}</code> cannot be modified via Telegram.",
+                    chat_id=chat_id
+                )
+                return
+
+            # Parse value based on type
+            if spec.type == "bool":
+                value = value_str.lower() in ('true', '1', 'yes', 'on')
+            elif spec.type == "int":
+                value = int(value_str)
+            else:
+                value = float(value_str)
+
+            # Set the value
+            old_value = spec.value
+            registry.set(param_name, value, modified_by=f"telegram:{chat_id}")
+
+            # Determine emoji based on change direction
+            if spec.type == "bool":
+                emoji = "✅" if value else "❌"
+            elif isinstance(value, (int, float)) and isinstance(old_value, (int, float)):
+                emoji = "⬆️" if value > old_value else "⬇️" if value < old_value else "➡️"
+            else:
+                emoji = "✅"
+
+            self.send_message(
+                f"{emoji} <b>Parameter Updated</b>\n\n"
+                f"<code>{param_name}</code>\n"
+                f"• Old: {old_value}\n"
+                f"• New: {value}\n"
+                f"• Type: {spec.type}\n"
+                f"• Category: {spec.category}\n\n"
+                f"ℹ️ {spec.description}",
+                chat_id=chat_id
+            )
+            logger.info(f"Parameter '{param_name}' set to {value} via Telegram by {chat_id}")
+
+        except ImportError:
+            self.send_message(
+                "⚠️ Parameter registry not available.",
+                chat_id=chat_id
+            )
+        except ValueError as e:
+            self.send_message(
+                f"❌ Invalid value: {e}",
+                chat_id=chat_id
+            )
+        except Exception as e:
+            self.send_message(
+                f"❌ Error: {e}",
+                chat_id=chat_id
+            )
+
+    def _cmd_preset(self, chat_id: str, args: list):
+        """Handle /preset command - apply a trading preset"""
+        try:
+            from parameter_registry import ParameterRegistry
+            registry = ParameterRegistry()
+
+            presets = registry.get_presets()
+
+            if not args:
+                # Show available presets
+                text = "📋 <b>Available Presets</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                for name, description in presets.items():
+                    text += f"• <b>{name}</b>: {description}\n"
+                text += "\n💡 Use: <code>/preset <name></code>"
+                self.send_message(text, chat_id=chat_id)
+                return
+
+            preset_name = args[0].lower()
+
+            if preset_name not in presets:
+                self.send_message(
+                    f"❌ Unknown preset: <code>{preset_name}</code>\n\n"
+                    f"Available: {', '.join(presets.keys())}",
+                    chat_id=chat_id
+                )
+                return
+
+            # Apply preset
+            success = registry.apply_preset(preset_name, modified_by=f"telegram:{chat_id}")
+
+            if success:
+                self.send_message(
+                    f"✅ <b>Preset Applied: {preset_name.upper()}</b>\n\n"
+                    f"{presets[preset_name]}\n\n"
+                    f"Use /params to see updated values.",
+                    chat_id=chat_id
+                )
+                logger.info(f"Preset '{preset_name}' applied via Telegram by {chat_id}")
+            else:
+                self.send_message(
+                    f"⚠️ Preset '{preset_name}' applied with some warnings.\n"
+                    f"Check logs for details.",
+                    chat_id=chat_id
+                )
+
+        except ImportError:
+            self.send_message(
+                "⚠️ Parameter registry not available.",
+                chat_id=chat_id
+            )
+        except Exception as e:
+            self.send_message(
+                f"❌ Error: {e}",
+                chat_id=chat_id
+            )
+
+    def _cmd_history(self, chat_id: str, args: list = None):
+        """Handle /history command - show parameter change history"""
+        try:
+            from parameter_registry import ParameterRegistry
+            registry = ParameterRegistry()
+
+            limit = int(args[0]) if args and args[0].isdigit() else 10
+            history = registry.get_change_history(limit)
+
+            if not history:
+                self.send_message("📜 No parameter changes recorded yet.", chat_id=chat_id)
+                return
+
+            text = f"📜 <b>Recent Parameter Changes</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            for entry in reversed(history):
+                timestamp = entry['timestamp'][:16]  # Truncate to minute
+                text += (
+                    f"• <code>{entry['parameter']}</code>\n"
+                    f"  {entry['old_value']} → {entry['new_value']}\n"
+                    f"  <i>by {entry['modified_by']} at {timestamp}</i>\n\n"
+                )
+
+            self.send_message(text, chat_id=chat_id)
+
+        except ImportError:
+            self.send_message("⚠️ Parameter registry not available.", chat_id=chat_id)
 
     # ============================================================
     # EXISTING NOTIFICATION METHODS

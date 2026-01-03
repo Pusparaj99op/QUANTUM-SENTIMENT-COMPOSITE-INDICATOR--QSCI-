@@ -1,61 +1,71 @@
 # Koyeb Service Configuration
-# This file configures health checks and deployment settings for the QSCI Trading Bot
+# QSCI Trading Bot - Optimized for Koyeb deployment
+# Documentation: https://www.koyeb.com/docs/reference/koyeb-yaml
 
 name: qsci-trading-bot
-type: worker  # Changed from web to worker for background processing
+type: web  # Use web type for health check endpoints
 
 # Docker build configuration
 build:
   dockerfile: Dockerfile
   context: .
 
-# Port configuration
+# Port configuration (Koyeb uses PORT env variable)
 ports:
-  - port: 8000
+  - port: 8080
     protocol: http
 
-# Health check configuration (prevents auto-sleep)
+# Health check configuration (prevents auto-sleep and monitors bot health)
 health_checks:
   - http:
-      port: 8000
-      path: /health
-    grace_period: 30
-    interval: 60
+      port: 8080
+      path: /health/live
+    grace_period: 60
+    interval: 30
     restart_limit: 3
     timeout: 10
 
-# Environment variables (set these in Koyeb dashboard)
-# env:
-#   - key: TELEGRAM_BOT_TOKEN
-#     value: your_bot_token_here
-#   - key: TELEGRAM_CHANNEL_ID
-#     value: your_channel_id_here
-#   - key: MONGODB_URI
-#     value: your_mongodb_uri_here
-#   - key: INITIAL_BALANCE
-#     value: "10000"
-#   - key: CHECK_INTERVAL_MINUTES
-#     value: "5"
-#   - key: TRADING_MODE
-#     value: paper
+# Environment variables (sensitive vars set in Koyeb dashboard)
+env:
+  - key: PORT
+    value: "8080"
+  - key: PYTHONUNBUFFERED
+    value: "1"
+  - key: TZ
+    value: "UTC"
+  # Set these in Koyeb dashboard for security:
+  # - BINANCE_API_KEY
+  # - BINANCE_API_SECRET
+  # - TELEGRAM_BOT_TOKEN
+  # - TELEGRAM_CHAT_ID
+  # - MONGODB_URI (optional)
+  # - TRADING_MODE (paper/live)
 
 # Resource allocation
 regions:
-  - fra  # Change to your preferred region
+  - fra  # Frankfurt - closest to Binance EU servers
 
-# Scaling configuration
-instance_type: free  # or nano, micro, small, etc.
+# Instance type - use micro or small for trading bots
+# free: 512MB RAM, shared CPU (may sleep)
+# nano: 512MB RAM, 0.1 vCPU
+# micro: 1GB RAM, 0.5 vCPU (recommended)
+# small: 2GB RAM, 1 vCPU
+instance_type: micro
 
-# Auto-scaling (keeps service alive)
+# Scaling configuration (single instance for trading bot)
 autoscaling:
   min: 1
   max: 1
 
-# Routes (expose the health endpoint)
+# Routes (expose health endpoints)
 routes:
   - path: /
-    port: 8000
+    port: 8080
   - path: /health
-    port: 8000
-  - path: /healthz
-    port: 8000
+    port: 8080
+  - path: /health/live
+    port: 8080
+  - path: /health/ready
+    port: 8080
+  - path: /metrics
+    port: 8080

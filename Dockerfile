@@ -53,6 +53,9 @@ RUN pip install --no-cache-dir -r requirements.txt \
 # Copy application code
 COPY . .
 
+# Create necessary directories
+RUN mkdir -p /app/data /app/logs /app/temp /app/config
+
 # Create non-root user for security
 RUN useradd -m -u 1000 qsci && chown -R qsci:qsci /app
 USER qsci
@@ -61,13 +64,17 @@ USER qsci
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV TZ=UTC
+# Koyeb uses PORT env variable
+ENV PORT=8080
+ENV HEALTH_CHECK_PORT=8080
 
-# Expose port for health check HTTP server (Web Service deployment)
-EXPOSE 8000
+# Expose port for health check HTTP server
+EXPOSE 8080
 
-# Health check (uses the HTTP endpoint)
-HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Health check (uses the HTTP endpoint from health_dashboard.py)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health/live || exit 1
 
-# Run the live trader
+# Run the live trader with health dashboard
 CMD ["python", "qsci_live_trader.py"]
+

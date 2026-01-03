@@ -148,12 +148,12 @@ NEWS_SENTIMENT_CONFIG = {
 # OPTIONS TRADING CONFIGURATION
 # ============================================================================
 
-# Position Management - More aggressive for profitability
+# Position Management - Optimized for Positive EV
 POSITION_CONFIG = {
     "account_balance": 10000,  # Demo account: $10,000
-    "risk_per_trade": 0.025,  # 2.5% risk per trade (slightly more aggressive)
-    "max_concurrent_positions": 2,  # Reduced to 2 for testing phase
-    "max_position_size_pct": 0.05,  # Max 5% of account per trade
+    "risk_per_trade": 0.02,  # 2% risk per trade (conservative for +EV)
+    "max_concurrent_positions": 1,  # Single position for higher quality
+    "max_position_size_pct": 0.04,  # Max 4% of account per trade
     "scale_in_enabled": False,
     "scale_in_threshold": 0.3,
 }
@@ -167,22 +167,23 @@ DTE_MULTIPLIERS = {
     "below_1": 0.0  # DO NOT TRADE
 }
 
-# Entry Criteria
+# Entry Criteria - Optimized for Higher Win Rate (+EV)
 ENTRY_CRITERIA = {
-    "min_qsci_signal": 0.12,  # Increased from 0.05 for higher quality trades
+    "min_qsci_signal": 0.15,  # Raised from 0.12 for higher quality signals
     "min_liquidity_adjustment": 0.5,
-    "min_dte": 5,  # Shorter DTE for faster theta capture on winners
+    "min_dte": 7,  # Slightly longer for less theta decay pressure
     "max_dte": 21,  # Max 3 weeks - less theta decay exposure
-    "min_delta": 0.30,  # Slightly more aggressive
-    "max_delta": 0.60,  # Balanced risk/reward
-    "target_moneyness": 1.03,  # 3% OTM for better leverage
-    "max_spread_pct": 0.02,  # Allow slightly wider spreads
-    "min_adx": 20,  # Increased from 10 for stronger trends
+    "min_delta": 0.40,  # Higher delta for better directional exposure
+    "max_delta": 0.55,  # Narrower range for optimal delta
+    "target_moneyness": 1.02,  # 2% OTM (closer to ATM)
+    "max_spread_pct": 0.015,  # Tighter spreads for better fills
+    "min_adx": 25,  # Raised from 20 for stronger trends
     "require_trend_alignment": True,  # Keep trend alignment
-    "max_iv_rank": 0.6,  # NEW: Avoid buying options when IV > 60th percentile
+    "max_iv_rank": 0.50,  # Lowered from 0.6 - avoid expensive options
 
-    # Alternative: Use strongest timeframe instead of blended (set to True for more trades)
-    "use_strongest_tf_signal": False,  # If True, uses strongest single TF signal instead of blended
+    # Filters for higher quality trades
+    "require_volume_confirmation": True,
+    "use_strongest_tf_signal": False,
 }# Greeks Configuration
 GREEKS_CONFIG = {
     "delta_weight": 0.40,
@@ -193,16 +194,16 @@ GREEKS_CONFIG = {
     "max_theta_decay": -0.05,  # Alert if theta < -0.05
 }
 
-# Exit Rules - Asymmetric R/R (let winners run, cut losers)
+# Exit Rules - Optimized for Better R/R (+EV)
 EXIT_RULES = {
-    "tp1_target": 1.5,  # First TP at 1.5x ATR
-    "tp2_target": 3.0,  # Let winners run to 3x ATR
-    "tp3_target": 5.0,  # Big winners to 5x ATR
-    "sl_multiplier": 1.2,  # Tighter SL - cut losers fast
-    "roll_dte_threshold": 8,  # Roll earlier
-    "mandatory_close_dte": 4,  # Close if not rolled
-    "trailing_activation": 0.8,  # Activate trail after 0.8 ATR profit
-    "trailing_distance": 0.35,  # Tighter trail at 35% of peak
+    "tp1_target": 2.0,  # Raised from 1.5x - let winners run more
+    "tp2_target": 3.5,  # Raised from 3.0x ATR
+    "tp3_target": 5.5,  # Big winners to 5.5x ATR
+    "sl_multiplier": 1.0,  # Tighter SL at 1.0x (was 1.2) - cut losers faster
+    "roll_dte_threshold": 10,  # Roll earlier (was 8)
+    "mandatory_close_dte": 5,  # Close if not rolled (was 4)
+    "trailing_activation": 1.0,  # Activate trail after 1.0 ATR profit
+    "trailing_distance": 0.30,  # Tighter trail at 30% of peak
 }
 
 # ============================================================================

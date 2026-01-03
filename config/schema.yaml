@@ -1,0 +1,663 @@
+# QSCI Trading System Configuration Schema v3.0
+# All parameters are runtime-modifiable via Telegram or API
+
+version: "3.0"
+description: "Quantum Sentiment Composite Indicator Trading Configuration"
+
+# ==============================================================================
+# TRADING CORE PARAMETERS
+# ==============================================================================
+trading:
+  account_balance:
+    type: float
+    default: 10000.0
+    min: 100.0
+    max: 10000000.0
+    description: "Account balance in USD"
+    hot_reload: true
+    telegram_editable: true
+    category: "position"
+
+  risk_per_trade:
+    type: float
+    default: 0.025
+    min: 0.001
+    max: 0.1
+    description: "Maximum risk per trade as fraction (2.5% = 0.025)"
+    hot_reload: true
+    telegram_editable: true
+    category: "risk"
+
+  max_concurrent_positions:
+    type: int
+    default: 2
+    min: 1
+    max: 20
+    description: "Maximum number of open positions"
+    hot_reload: true
+    telegram_editable: true
+    category: "position"
+
+  max_position_size_pct:
+    type: float
+    default: 0.05
+    min: 0.01
+    max: 0.25
+    description: "Maximum position size as fraction of account (5% = 0.05)"
+    hot_reload: true
+    telegram_editable: true
+    category: "position"
+
+# ==============================================================================
+# SIGNAL PARAMETERS
+# ==============================================================================
+signals:
+  min_qsci_signal:
+    type: float
+    default: 0.12
+    min: 0.01
+    max: 0.5
+    description: "Minimum QSCI signal strength to enter trade"
+    hot_reload: true
+    telegram_editable: true
+    category: "entry"
+
+  min_adx:
+    type: int
+    default: 20
+    min: 5
+    max: 50
+    description: "Minimum ADX for trend strength confirmation"
+    hot_reload: true
+    telegram_editable: true
+    category: "entry"
+
+  max_iv_rank:
+    type: float
+    default: 0.6
+    min: 0.0
+    max: 1.0
+    description: "Maximum IV rank to buy options (avoids expensive IV)"
+    hot_reload: true
+    telegram_editable: true
+    category: "entry"
+
+  min_delta:
+    type: float
+    default: 0.30
+    min: 0.1
+    max: 0.7
+    description: "Minimum option delta for entry"
+    hot_reload: true
+    telegram_editable: true
+    category: "greeks"
+
+  max_delta:
+    type: float
+    default: 0.60
+    min: 0.3
+    max: 0.9
+    description: "Maximum option delta for entry"
+    hot_reload: true
+    telegram_editable: true
+    category: "greeks"
+
+  min_dte:
+    type: int
+    default: 5
+    min: 1
+    max: 30
+    description: "Minimum days to expiration"
+    hot_reload: true
+    telegram_editable: true
+    category: "options"
+
+  max_dte:
+    type: int
+    default: 21
+    min: 7
+    max: 90
+    description: "Maximum days to expiration"
+    hot_reload: true
+    telegram_editable: true
+    category: "options"
+
+# ==============================================================================
+# TIMEFRAME WEIGHTS
+# ==============================================================================
+timeframes:
+  weights:
+    4h:
+      type: float
+      default: 0.25
+      min: 0.0
+      max: 1.0
+      description: "Weight for 4-hour timeframe"
+      hot_reload: true
+      telegram_editable: true
+      category: "timeframe"
+    2h:
+      type: float
+      default: 0.20
+      min: 0.0
+      max: 1.0
+      description: "Weight for 2-hour timeframe"
+      hot_reload: true
+      telegram_editable: true
+      category: "timeframe"
+    1h:
+      type: float
+      default: 0.15
+      min: 0.0
+      max: 1.0
+      description: "Weight for 1-hour timeframe"
+      hot_reload: true
+      telegram_editable: true
+      category: "timeframe"
+    30m:
+      type: float
+      default: 0.15
+      min: 0.0
+      max: 1.0
+      description: "Weight for 30-minute timeframe"
+      hot_reload: true
+      telegram_editable: true
+      category: "timeframe"
+    15m:
+      type: float
+      default: 0.10
+      min: 0.0
+      max: 1.0
+      description: "Weight for 15-minute timeframe"
+      hot_reload: true
+      telegram_editable: true
+      category: "timeframe"
+    5m:
+      type: float
+      default: 0.10
+      min: 0.0
+      max: 1.0
+      description: "Weight for 5-minute timeframe"
+      hot_reload: true
+      telegram_editable: true
+      category: "timeframe"
+    1m:
+      type: float
+      default: 0.05
+      min: 0.0
+      max: 1.0
+      description: "Weight for 1-minute timeframe"
+      hot_reload: true
+      telegram_editable: true
+      category: "timeframe"
+
+# ==============================================================================
+# EXIT RULES
+# ==============================================================================
+exits:
+  tp1_target:
+    type: float
+    default: 1.5
+    min: 0.5
+    max: 5.0
+    description: "First take profit target (ATR multiplier)"
+    hot_reload: true
+    telegram_editable: true
+    category: "exit"
+
+  tp2_target:
+    type: float
+    default: 3.0
+    min: 1.0
+    max: 10.0
+    description: "Second take profit target (ATR multiplier)"
+    hot_reload: true
+    telegram_editable: true
+    category: "exit"
+
+  tp3_target:
+    type: float
+    default: 5.0
+    min: 2.0
+    max: 15.0
+    description: "Third take profit target (ATR multiplier)"
+    hot_reload: true
+    telegram_editable: true
+    category: "exit"
+
+  sl_multiplier:
+    type: float
+    default: 1.2
+    min: 0.5
+    max: 3.0
+    description: "Stop loss multiplier (ATR-based)"
+    hot_reload: true
+    telegram_editable: true
+    category: "exit"
+
+  trailing_activation:
+    type: float
+    default: 0.8
+    min: 0.1
+    max: 2.0
+    description: "Activate trailing stop after this profit (ATR multiplier)"
+    hot_reload: true
+    telegram_editable: true
+    category: "exit"
+
+  trailing_distance:
+    type: float
+    default: 0.35
+    min: 0.1
+    max: 0.8
+    description: "Trailing stop distance as fraction of peak"
+    hot_reload: true
+    telegram_editable: true
+    category: "exit"
+
+  roll_dte_threshold:
+    type: int
+    default: 8
+    min: 3
+    max: 14
+    description: "Days to expiration to trigger position roll"
+    hot_reload: true
+    telegram_editable: true
+    category: "exit"
+
+  mandatory_close_dte:
+    type: int
+    default: 4
+    min: 1
+    max: 7
+    description: "Mandatory close if not rolled by this DTE"
+    hot_reload: true
+    telegram_editable: true
+    category: "exit"
+
+# ==============================================================================
+# INDICATOR PARAMETERS
+# ==============================================================================
+indicators:
+  rsi_period:
+    type: int
+    default: 14
+    min: 5
+    max: 30
+    description: "RSI calculation period"
+    hot_reload: true
+    telegram_editable: true
+    category: "momentum"
+
+  macd_fast:
+    type: int
+    default: 12
+    min: 5
+    max: 20
+    description: "MACD fast EMA period"
+    hot_reload: true
+    telegram_editable: true
+    category: "trend"
+
+  macd_slow:
+    type: int
+    default: 26
+    min: 15
+    max: 40
+    description: "MACD slow EMA period"
+    hot_reload: true
+    telegram_editable: true
+    category: "trend"
+
+  macd_signal:
+    type: int
+    default: 9
+    min: 5
+    max: 15
+    description: "MACD signal line period"
+    hot_reload: true
+    telegram_editable: true
+    category: "trend"
+
+  atr_period:
+    type: int
+    default: 14
+    min: 7
+    max: 30
+    description: "ATR calculation period"
+    hot_reload: true
+    telegram_editable: true
+    category: "volatility"
+
+  bb_period:
+    type: int
+    default: 20
+    min: 10
+    max: 50
+    description: "Bollinger Bands period"
+    hot_reload: true
+    telegram_editable: true
+    category: "volatility"
+
+  bb_std:
+    type: float
+    default: 2.0
+    min: 1.0
+    max: 3.0
+    description: "Bollinger Bands standard deviation multiplier"
+    hot_reload: true
+    telegram_editable: true
+    category: "volatility"
+
+  adx_period:
+    type: int
+    default: 14
+    min: 7
+    max: 30
+    description: "ADX calculation period"
+    hot_reload: true
+    telegram_editable: true
+    category: "trend"
+
+# ==============================================================================
+# SIGNAL CATEGORY WEIGHTS
+# ==============================================================================
+weights:
+  momentum_weight:
+    type: float
+    default: 0.35
+    min: 0.0
+    max: 1.0
+    description: "Weight for momentum indicators in QSCI"
+    hot_reload: true
+    telegram_editable: true
+    category: "weights"
+
+  trend_weight:
+    type: float
+    default: 0.30
+    min: 0.0
+    max: 1.0
+    description: "Weight for trend indicators in QSCI"
+    hot_reload: true
+    telegram_editable: true
+    category: "weights"
+
+  volume_weight:
+    type: float
+    default: 0.15
+    min: 0.0
+    max: 1.0
+    description: "Weight for volume indicators in QSCI"
+    hot_reload: true
+    telegram_editable: true
+    category: "weights"
+
+  volatility_weight:
+    type: float
+    default: 0.10
+    min: 0.0
+    max: 1.0
+    description: "Weight for volatility indicators in QSCI"
+    hot_reload: true
+    telegram_editable: true
+    category: "weights"
+
+  pattern_weight:
+    type: float
+    default: 0.10
+    min: 0.0
+    max: 1.0
+    description: "Weight for pattern indicators in QSCI"
+    hot_reload: true
+    telegram_editable: true
+    category: "weights"
+
+  mtc_weight:
+    type: float
+    default: 0.70
+    min: 0.0
+    max: 1.0
+    description: "Weight for technical signals vs sentiment"
+    hot_reload: true
+    telegram_editable: true
+    category: "weights"
+
+  sentiment_weight:
+    type: float
+    default: 0.30
+    min: 0.0
+    max: 1.0
+    description: "Weight for sentiment in final QSCI"
+    hot_reload: true
+    telegram_editable: true
+    category: "weights"
+
+# ==============================================================================
+# GREEKS CONFIGURATION
+# ==============================================================================
+greeks:
+  delta_weight:
+    type: float
+    default: 0.40
+    min: 0.0
+    max: 1.0
+    description: "Delta weight in Greeks scoring"
+    hot_reload: true
+    telegram_editable: true
+    category: "greeks"
+
+  gamma_weight:
+    type: float
+    default: 0.25
+    min: 0.0
+    max: 1.0
+    description: "Gamma weight in Greeks scoring"
+    hot_reload: true
+    telegram_editable: true
+    category: "greeks"
+
+  vega_weight:
+    type: float
+    default: 0.20
+    min: 0.0
+    max: 1.0
+    description: "Vega weight in Greeks scoring"
+    hot_reload: true
+    telegram_editable: true
+    category: "greeks"
+
+  theta_weight:
+    type: float
+    default: 0.15
+    min: 0.0
+    max: 1.0
+    description: "Theta weight in Greeks scoring"
+    hot_reload: true
+    telegram_editable: true
+    category: "greeks"
+
+  max_gamma_risk:
+    type: float
+    default: 0.015
+    min: 0.005
+    max: 0.05
+    description: "Maximum acceptable gamma risk"
+    hot_reload: true
+    telegram_editable: true
+    category: "greeks"
+
+  max_theta_decay:
+    type: float
+    default: -0.05
+    min: -0.2
+    max: 0.0
+    description: "Maximum acceptable theta decay (negative)"
+    hot_reload: true
+    telegram_editable: true
+    category: "greeks"
+
+# ==============================================================================
+# FEES AND COSTS
+# ==============================================================================
+fees:
+  trading_fee:
+    type: float
+    default: 0.001
+    min: 0.0
+    max: 0.01
+    description: "Trading fee as fraction (0.1% = 0.001)"
+    hot_reload: false
+    telegram_editable: false
+    category: "costs"
+
+  options_fee:
+    type: float
+    default: 0.0002
+    min: 0.0
+    max: 0.005
+    description: "Options-specific fee"
+    hot_reload: false
+    telegram_editable: false
+    category: "costs"
+
+  slippage_pct:
+    type: float
+    default: 0.002
+    min: 0.0
+    max: 0.01
+    description: "Expected slippage percentage"
+    hot_reload: true
+    telegram_editable: true
+    category: "costs"
+
+# ==============================================================================
+# STRATEGY FLAGS
+# ==============================================================================
+strategy:
+  use_multi_timeframe:
+    type: bool
+    default: true
+    description: "Use multi-timeframe analysis"
+    hot_reload: true
+    telegram_editable: true
+    category: "strategy"
+
+  use_sentiment_filter:
+    type: bool
+    default: false
+    description: "Enable sentiment-based filtering"
+    hot_reload: true
+    telegram_editable: true
+    category: "strategy"
+
+  only_strong_signals:
+    type: bool
+    default: false
+    description: "Only trade high-conviction signals"
+    hot_reload: true
+    telegram_editable: true
+    category: "strategy"
+
+  require_trend_alignment:
+    type: bool
+    default: true
+    description: "Require trend alignment for entries"
+    hot_reload: true
+    telegram_editable: true
+    category: "strategy"
+
+  require_volume_confirmation:
+    type: bool
+    default: false
+    description: "Require volume confirmation for entries"
+    hot_reload: true
+    telegram_editable: true
+    category: "strategy"
+
+  dynamic_position_sizing:
+    type: bool
+    default: true
+    description: "Scale position size with conviction"
+    hot_reload: true
+    telegram_editable: true
+    category: "strategy"
+
+  use_kelly_criterion:
+    type: bool
+    default: false
+    description: "Use Kelly criterion for position sizing"
+    hot_reload: true
+    telegram_editable: true
+    category: "strategy"
+
+  kelly_fraction:
+    type: float
+    default: 0.15
+    min: 0.05
+    max: 0.5
+    description: "Fraction of Kelly optimal to use"
+    hot_reload: true
+    telegram_editable: true
+    category: "strategy"
+
+# ==============================================================================
+# RISK LIMITS
+# ==============================================================================
+risk:
+  max_daily_loss_pct:
+    type: float
+    default: 0.05
+    min: 0.01
+    max: 0.2
+    description: "Maximum daily loss before trading pause (5% = 0.05)"
+    hot_reload: true
+    telegram_editable: true
+    category: "risk"
+
+  max_drawdown_pct:
+    type: float
+    default: 0.20
+    min: 0.05
+    max: 0.5
+    description: "Maximum drawdown before shutdown (20% = 0.20)"
+    hot_reload: true
+    telegram_editable: true
+    category: "risk"
+
+# ==============================================================================
+# PRESETS
+# ==============================================================================
+presets:
+  conservative:
+    description: "Low risk, high selectivity"
+    overrides:
+      risk_per_trade: 0.015
+      max_concurrent_positions: 1
+      min_qsci_signal: 0.20
+      min_adx: 25
+      max_iv_rank: 0.5
+      sl_multiplier: 1.0
+      only_strong_signals: true
+
+  moderate:
+    description: "Balanced risk/reward (default)"
+    overrides:
+      risk_per_trade: 0.025
+      max_concurrent_positions: 2
+      min_qsci_signal: 0.12
+      min_adx: 20
+      max_iv_rank: 0.6
+      sl_multiplier: 1.2
+      only_strong_signals: false
+
+  aggressive:
+    description: "Higher risk, more trades"
+    overrides:
+      risk_per_trade: 0.04
+      max_concurrent_positions: 4
+      min_qsci_signal: 0.08
+      min_adx: 15
+      max_iv_rank: 0.75
+      sl_multiplier: 1.5
+      only_strong_signals: false

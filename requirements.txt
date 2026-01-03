@@ -27,17 +27,20 @@ vaderSentiment>=3.3.2,<4.0.0
 
 # === Async Support ===
 asyncio-throttle>=1.0.2,<2.0.0
+websockets>=12.0,<16.0.0
 
 # === Logging & Configuration ===
 python-dotenv>=1.0.0,<2.0.0
 colorama>=0.4.6,<1.0.0
+pyyaml>=6.0.0,<7.0.0
 
 # === Date/Time ===
 pytz>=2023.3
 python-dateutil>=2.8.2,<3.0.0
 
 # === Optional: Performance ===
-# numba>=0.57.0  # Commented - heavy dependency, not essential for live trading
+numba>=0.57.0
+psutil>=5.9.0
 
 # === Optional: Visualization (not needed in production) ===
 # matplotlib>=3.7.0
